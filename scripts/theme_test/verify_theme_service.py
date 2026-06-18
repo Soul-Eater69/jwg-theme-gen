@@ -5,8 +5,9 @@ for one or more value stream ids, prints the assembled catalogue, and asserts th
 (attributes present, stages found, each L3 carries its L2 name). Use this to confirm the SQL layer
 works before wiring the real service into the generation flow.
 
-Setup: `pip install aioodbc`, then set the SQL_* env vars (see db_session.build_async_session_factory)
-with the same values you used in verify_catalogue_schema.py.
+Setup: `pip install aioodbc`, then set the DB_* values in .env (read by jwg_app.core.config Settings):
+DB_SERVER, DATABASE, DB_USERNAME, DB_PASSWORD (DB_DRIVER / DB_AUTHENTICATION / DB_ENCRYPT /
+DB_TRUST_SERVER_CERTIFICATE have defaults).
 
 Run from the repo root:
     python scripts/theme_test/verify_theme_service.py VSR00074583
@@ -28,7 +29,7 @@ import argparse  # noqa: E402
 import asyncio  # noqa: E402
 from typing import List  # noqa: E402
 
-from db_session import build_async_session_factory  # noqa: E402
+from db_session import session_scope  # noqa: E402
 
 from jwg_app.domain.services.theme_service import ThemeService  # noqa: E402
 from jwg_app.infrastructure.repositories import (  # noqa: E402
@@ -51,8 +52,7 @@ def build_service(session) -> ThemeService:
 
 
 async def main(vs_ids: List[str]) -> None:
-    factory = build_async_session_factory()
-    async with factory() as session:
+    async with session_scope() as session:
         catalogue = await build_service(session).fetch_theme_inputs(vs_ids)
 
     failures = 0

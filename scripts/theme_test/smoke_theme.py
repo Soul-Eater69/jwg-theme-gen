@@ -201,10 +201,10 @@ async def main(args: argparse.Namespace) -> None:
     er, vs = build_er_worklet(), build_vs_worklet()
     try:
         if args.real_db:
-            from db_session import build_async_session_factory
+            from db_session import session_scope
 
             print("# using REAL catalogue (Azure SQL via ThemeService)")
-            async with build_async_session_factory()() as session:
+            async with session_scope() as session:
                 handler = ThemeGenerationHandler(_build_real_service(session), platform, CONFIG_PATH)
                 themes = await handler.run(er, [vs])
         else:
