@@ -23,10 +23,9 @@ class VSContext(BaseModel):
     vs_id: str
     vs_name: str
     vs_description: str
-    # governed-catalogue enrichment (stage selection reads all three; business needs the proposition):
+    # governed-catalogue enrichment (stage selection reads both; business needs the proposition):
     value_proposition: str = ""
     trigger: str = ""
-    assumptions: str = ""
 
 
 class ERContext(BaseModel):
@@ -87,7 +86,6 @@ class VSCatalogue(BaseModel):
 
     value_proposition: str = ""
     trigger: str = ""
-    assumptions: str = ""
 
 
 class AzureSQLData(BaseModel):

@@ -97,8 +97,6 @@ def _vs_stage_block(vs: VSContext, stages: Sequence[ValueStage]) -> str:
         lines.append(f"Value proposition: {vs.value_proposition}")
     if vs.trigger:
         lines.append(f"Trigger: {vs.trigger}")
-    if vs.assumptions:
-        lines.append(f"Assumptions: {vs.assumptions}")
     lines.append("Candidate stages:")
     lines.append("\n".join(_stage_line(s) for s in stages))
     return "\n".join(lines)
@@ -114,8 +112,6 @@ def _vs_l3_block(
         head.append(f"value proposition: {vs.value_proposition}")
     if vs.trigger:
         head.append(f"trigger: {vs.trigger}")
-    if vs.assumptions:
-        head.append(f"assumptions: {vs.assumptions}")
     blocks = ["\n".join(head)]
     for stage, caps in stage_caps:
         lines = [

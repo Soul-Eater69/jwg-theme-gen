@@ -102,7 +102,6 @@ def to_vs_context(vs_worklet: Worklet, catalogue: AzureSQLData) -> VSContext:
         vs_description=get_property(vs_worklet, VSProps.DESCRIPTION, ""),
         value_proposition=vs.value_proposition,
         trigger=vs.trigger,
-        assumptions=vs.assumptions,
     )
 
 
