@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Protocol, Tuple, Type
+from typing import Any, Dict, List, Protocol
 
 
 class PlatformClient(Protocol):
@@ -55,21 +55,5 @@ class PlatformClient(Protocol):
 
         Returns:
             Any: The response from the external platform API.
-        """
-        ...
-
-    # --- added for theme generation: the chat-completions structured-output call on the concrete
-    # PlatformRestClient (not in the original Protocol). ---
-    async def agenerate(
-        self,
-        message: List[Dict[str, str]],
-        model_params: Optional[Dict[str, Any]] = None,
-        output_function: Optional[Type] = None,
-        trace_id: Optional[str] = None,
-        bearer_token: Optional[str] = None,
-    ) -> Tuple[Any, Optional[str], int]:
-        """
-        Chat-completions call. With ``output_function`` (a pydantic model) set, the response is
-        constrained to that schema and parsed. Returns ``(data, error, status_code)``.
         """
         ...
