@@ -1,9 +1,9 @@
-"""Theme generation data models (LLD §8.3).
+"""Theme generation data models.
 
 Input contexts (ER + VS), the governed catalogue payload (Azure SQL), the per-call LLM output
 schemas (batched across all approved Value Streams), and the resolved capability records. These
-are the contracts the ``ThemeGenerationHandler`` and its prompts read/write; the API ``Worklet``
-shape lives in the shared models and is assembled at the boundary.
+are the contracts the theme generation handler and its prompts read/write; the API ``Worklet``
+shape comes from the shared models and is assembled at the boundary.
 """
 
 from __future__ import annotations

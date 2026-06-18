@@ -1,8 +1,8 @@
-"""Data Mapper between the API Worklet envelope and the theme-generation domain.
+"""Maps between the Worklet envelope and the theme-generation domain.
 
 All Worklet <-> domain translation lives here, so the handler orchestrates and never indexes
 worklet properties by hand. The property-name strings are the only coupling to the worklet shape
-and are the single place to reconcile with the prod worklets.
+and are kept in one place here.
 """
 
 from __future__ import annotations

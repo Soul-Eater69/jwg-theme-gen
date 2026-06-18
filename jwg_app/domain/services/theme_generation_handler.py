@@ -1,18 +1,18 @@
-"""ThemeGenerationHandler (LLD §8.3).
+"""Theme generation handler.
 
-Given the ER worklet and the approved Value Stream worklets, generate one THEME worklet per VS.
-The heavy calls are batched across ALL approved Value Streams (the reason ``run`` takes the VS
-list): stage selection, description body + framing, and capabilities each run once for every VS;
-only business needs is per VS. Generation reads the ER's RAW ticket text.
+Given the ER worklet and the approved Value Stream worklets, generates one THEME worklet per
+Value Stream. The heavy calls are batched across all approved Value Streams (which is why ``run``
+takes the VS list): stage selection, description body + framing, and capabilities each run once
+for every VS; only business needs runs per VS. Generation reads the ER's raw ticket text.
 
-Phases:
-  A — ticket-level, in parallel: description body, description framing (all VS), stage selection (all VS).
-  B — after stages, in parallel: capabilities (one merged call, all VS) ∥ business needs (per VS).
-  C — deterministic, per VS: derive L2, assemble the THEME worklet (description = framing + body).
+Order of work:
+  1. Ticket-level, in parallel: description body, description framing (all VS), stage selection (all VS).
+  2. After stages, in parallel: capabilities (one merged call, all VS) and business needs (per VS).
+  3. Per VS: derive L2 capabilities, then assemble the THEME worklet (description = framing + body).
 
-Design: SRP — orchestration here; prompt rendering + output resolution in ``theme_generation_helper``;
-worklet↔domain translation in ``worklet_mapper``; schemas in ``models.theme_generation``. DIP/ISP —
-the ``PlatformClient`` and ``ThemeCatalogueReader`` Protocols are injected; the handler never persists.
+Orchestration lives here; prompt rendering and output resolution live in ``theme_generation_helper``,
+worklet/domain translation in ``theme_worklet_mapper``, and the output schemas in ``models.theme_generation``.
+The platform client and catalogue reader are injected; the handler never persists.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ from jwg_app.domain.models.theme_generation import (
 )
 from jwg_app.domain.models.worklet import Worklet
 from jwg_app.domain.services import theme_generation_helper as helper
-from jwg_app.domain.services import worklet_mapper as mapper
+from jwg_app.domain.services import theme_worklet_mapper as mapper
 from jwg_app.domain.services.utils import load_config
 
 
@@ -69,20 +69,20 @@ class ThemeGenerationHandler:
         }
         vs_list = list(vs_by_id.values())
 
-        # Phase A — ticket-level batched calls, in parallel.
+        # Step 1 — ticket-level batched calls, in parallel.
         body, framings, stages_by_vs = await asyncio.gather(
             self._description_body(er),
             self._description_framings(er, vs_list),
             self._stage_selection(er, vs_list, catalogue),
         )
 
-        # Phase B — after stages: capabilities (one merged call) ∥ business needs (per VS).
+        # Step 2 — after stages: capabilities (one merged call) and business needs (per VS).
         l3_by_stage, needs_by_vs = await asyncio.gather(
             self._capabilities(er, vs_list, stages_by_vs, catalogue),
             self._business_needs(er, vs_list, stages_by_vs),
         )
 
-        # Phase C — assemble per VS.
+        # Step 3 — assemble per VS.
         themes: list[Worklet] = []
         for worklet, vs_id in zip(vs_worklets, vs_ids):
             vs = vs_by_id[vs_id]
@@ -101,7 +101,7 @@ class ThemeGenerationHandler:
             )
         return themes
 
-    # ---- Phase A: description body (1 call, VS-agnostic) ------------------------------
+    # ---- Step 1: description body (1 call, VS-agnostic) ------------------------------
 
     async def _description_body(self, er: ERContext) -> str:
         """Generate the shared description body reused by every Theme for the ER."""
@@ -110,7 +110,7 @@ class ThemeGenerationHandler:
         )
         return out.text
 
-    # ---- Phase A: description framing (1 call, all VS) -------------------------------
+    # ---- Step 1: description framing (1 call, all VS) -------------------------------
 
     async def _description_framings(self, er: ERContext, vs_list: list[VSContext]) -> dict[str, str]:
         """Generate the per-VS opening paragraph for each Theme description."""
@@ -123,7 +123,7 @@ class ThemeGenerationHandler:
         )
         return helper.resolve_framings(out, [vs.vs_id for vs in vs_list])
 
-    # ---- Phase A: stage selection (1 call, all VS) ----------------------------------
+    # ---- Step 1: stage selection (1 call, all VS) ----------------------------------
 
     async def _stage_selection(
         self, er: ERContext, vs_list: list[VSContext], catalogue: dict[str, AzureSQLData]
@@ -143,7 +143,7 @@ class ThemeGenerationHandler:
         )
         return helper.resolve_stages_for_all(out, {vs.vs_id: stages for vs, stages in pairs})
 
-    # ---- Phase B: capabilities (1 merged call, all VS) ------------------------------
+    # ---- Step 2: capabilities (1 merged call, all VS) ------------------------------
 
     async def _capabilities(
         self,
@@ -176,7 +176,7 @@ class ThemeGenerationHandler:
         )
         return helper.resolve_l3_merged(out, candidates_by_stage)
 
-    # ---- Phase B: business needs (per VS, parallel) ---------------------------------
+    # ---- Step 2: business needs (per VS, parallel) ---------------------------------
 
     async def _business_needs(
         self, er: ERContext, vs_list: list[VSContext], stages_by_vs: dict[str, list[SelectedStage]]
