@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 from urllib.parse import quote_plus
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -44,3 +45,17 @@ def build_async_session_factory() -> async_sessionmaker[AsyncSession]:
     url = f"mssql+aioodbc:///?odbc_connect={quote_plus(odbc)}"
     engine = create_async_engine(url, pool_pre_ping=True)
     return async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+async def _check() -> None:
+    """Open one async session and run SELECT 1 to confirm connectivity."""
+    factory = build_async_session_factory()
+    async with factory() as session:
+        result = await session.execute(text("SELECT 1"))
+        print("DB session OK, SELECT 1 ->", result.scalar())
+
+
+if __name__ == "__main__":
+    import asyncio
+
+    asyncio.run(_check())
