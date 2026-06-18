@@ -115,7 +115,7 @@ class SelectedStage(CamelModel):
 # The RAW model picks ``agenerate`` validates against; the handler resolves them against the
 # governed catalogue into the domain records above.
 
-class VsStageSelection(BaseModel):
+class VsStageSelection(CamelModel):
     """One Value Stream's stage picks (batched stage-selection entry). Empty -> the architect
     takes the whole lifecycle."""
 
@@ -123,41 +123,41 @@ class VsStageSelection(BaseModel):
     selected_stages: List[SelectedStage] = Field(default_factory=list)
 
 
-class BatchedStageSelection(BaseModel):
+class BatchedStageSelection(CamelModel):
     """Stage selection output: one entry per approved Value Stream."""
 
     value_streams: List[VsStageSelection] = Field(default_factory=list)
 
 
-class CapabilityPick(BaseModel):
+class CapabilityPick(CamelModel):
     capability_id: str
     name: str = ""
     reason: str = ""
 
 
-class StageCapabilityPicks(BaseModel):
+class StageCapabilityPicks(CamelModel):
     stage_id: str
     capabilities: List[CapabilityPick] = Field(default_factory=list)
 
 
-class BatchedCapabilitySelection(BaseModel):
+class BatchedCapabilitySelection(CamelModel):
     """Merged capability output: picks keyed by stageId, across every approved Value Stream."""
 
     stages: List[StageCapabilityPicks] = Field(default_factory=list)
 
 
-class VsFraming(BaseModel):
+class VsFraming(CamelModel):
     value_stream_id: str
     text: str = ""
 
 
-class FramingsOut(BaseModel):
+class FramingsOut(CamelModel):
     """Description-framing output: one opening paragraph per approved Value Stream."""
 
     framings: List[VsFraming] = Field(default_factory=list)
 
 
-class TextOut(BaseModel):
+class TextOut(CamelModel):
     """A single free-text output. Used by both the description body and business needs calls."""
 
     text: str = ""
