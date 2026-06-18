@@ -136,7 +136,6 @@ def build_er_worklet() -> Worklet:
                 "The business needs a faster way to procure approved physical assets, including "
                 "order management and vendor contract negotiation for the new fiscal year.",
             ),
-            _prop("Docs Summary", {}),
         ],
     )
 

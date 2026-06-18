@@ -12,22 +12,17 @@ list of approved value-stream worklets, and returns one unsaved **THEME** workle
 
 ## 1. Engagement Request (ER) worklet — input
 
-Read by `to_er_context`. Grounds every generation prompt; `rawText` carries the raw ticket text used
-for generation ("raw to decide").
+Read by `to_er_context`. Generation grounds on the **raw ticket text only** ("raw to decide").
 
 | Domain field (`ERContext`) | Worklet source | Property name |
 | --- | --- | --- |
 | `idmt_ticket_id` | worklet identity | `source_id` (fallback `id`) |
 | `idmt_ticket_title` | property | `title` |
 | `generated_summary` | property | `rawText` |
-| `business_problem` | `Docs Summary` dict | `businessProblem` |
-| `business_capability` | `Docs Summary` dict | `businessCapability` |
-| `key_terms` | `Docs Summary` dict | `keyTerms` |
-| `stakeholders` | `Docs Summary` dict | `stakeholders` |
-| `systems_and_products` | `Docs Summary` dict | `systemsAndProducts` |
 
-`Docs Summary` is a single property whose value is a dict; the keys above are read from it. If it is
-absent or not a dict, the summary-derived fields default to empty (the mapper guards the type).
+That is the entire ER input. Summary-derived fields (`businessProblem`, `businessCapability`,
+`keyTerms`, `stakeholders`, `systemsAndProducts`) are **not** used by generation — per the prompt I/O
+contract, the generation prompts read raw text only; the summary is a separate retrieval artifact.
 
 ---
 
@@ -104,5 +99,5 @@ Built by `to_theme_worklet`, one per approved value stream. Returned unsaved; th
   (`value_stream_name` / `value_stream_description`) instead — the catalogue already reads that table.
 - **`vs_id` source:** `source_id` falls back to `id`. This is the SQL join key, so it must be the VSR
   id of the approved value stream.
-- Property names with spaces (`Docs Summary`, `Business Needs`, `L3 Business Capability`,
-  `L2 Business Capability`) are intentional — they match the existing worklet property naming.
+- Property names with spaces (`Business Needs`, `L3 Business Capability`, `L2 Business Capability`)
+  are intentional — they match the existing worklet property naming.

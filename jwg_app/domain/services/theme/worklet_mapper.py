@@ -63,15 +63,6 @@ def set_property(worklet: Worklet, name: str, value: Any) -> None:
 class ERProps:
     TITLE = "title"
     RAW_TEXT = "rawText"
-    DOCS_SUMMARY = "Docs Summary"
-
-
-class DocsSummaryKeys:
-    BUSINESS_PROBLEM = "businessProblem"
-    BUSINESS_CAPABILITY = "businessCapability"
-    KEY_TERMS = "keyTerms"
-    STAKEHOLDERS = "stakeholders"
-    SYSTEMS = "systemsAndProducts"
 
 
 class VSProps:
@@ -105,7 +96,9 @@ def value_stream_id(vs_worklet: Worklet) -> str:
 
 def to_er_context(er_worklet: Worklet) -> ERContext:
     """
-    Extract the ticket fields that ground every theme-generation prompt.
+    Extract the ticket fields that ground theme generation: the id, title, and raw text.
+
+    Generation reads the raw ticket text only ("raw to decide"), so no summary-derived fields are read.
 
     Args:
         er_worklet: The engagement-request worklet.
@@ -113,18 +106,10 @@ def to_er_context(er_worklet: Worklet) -> ERContext:
     Returns:
         The engagement-request context.
     """
-    summary = get_property(er_worklet, ERProps.DOCS_SUMMARY)
-    summary = summary if isinstance(summary, dict) else {}  # guarded: the next lines call .get()
-
     return ERContext(
         idmt_ticket_id=_worklet_identity(er_worklet),
         idmt_ticket_title=get_property(er_worklet, ERProps.TITLE, ""),
         generated_summary=get_property(er_worklet, ERProps.RAW_TEXT, ""),
-        business_problem=summary.get(DocsSummaryKeys.BUSINESS_PROBLEM, ""),
-        business_capability=summary.get(DocsSummaryKeys.BUSINESS_CAPABILITY, ""),
-        key_terms=summary.get(DocsSummaryKeys.KEY_TERMS, []),
-        stakeholders=summary.get(DocsSummaryKeys.STAKEHOLDERS, []),
-        systems_and_products=summary.get(DocsSummaryKeys.SYSTEMS, []),
     )
 
 

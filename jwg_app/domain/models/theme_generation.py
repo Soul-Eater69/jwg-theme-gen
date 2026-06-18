@@ -29,19 +29,15 @@ class VSContext(BaseModel):
 
 
 class ERContext(BaseModel):
-    """The normalized Engagement Request context (from the ER worklet's condensed fields).
+    """The Engagement Request context read from the ER worklet.
 
-    ``generated_summary`` carries the RAW ticket text in the generation path.
+    ``generated_summary`` carries the RAW ticket text - the only ticket input generation reads
+    ("raw to decide"). Summary-derived fields are intentionally not part of generation.
     """
 
     idmt_ticket_id: str
     idmt_ticket_title: str
     generated_summary: str
-    business_problem: str
-    business_capability: str
-    key_terms: List[str] = Field(default_factory=list)
-    stakeholders: List[str] = Field(default_factory=list)
-    systems_and_products: List[str] = Field(default_factory=list)
 
 
 class ValueStage(BaseModel):

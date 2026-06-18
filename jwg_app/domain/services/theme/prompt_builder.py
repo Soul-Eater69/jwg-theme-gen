@@ -23,7 +23,8 @@ def ticket_context(er: ERContext) -> str:
     """
     Build the ticket-context block that every prompt reads.
 
-    ``generated_summary`` carries the raw ticket text; the optional fields are added only when set.
+    Generation reads the raw ticket text only ("raw to decide"); summary-derived fields are not part
+    of the generation prompts, per the prompt I/O contract. ``generated_summary`` carries that raw text.
 
     Args:
         er: The engagement-request context extracted from the ticket worklet.
@@ -31,18 +32,7 @@ def ticket_context(er: ERContext) -> str:
     Returns:
         The ticket-context block as prompt-ready text.
     """
-    lines = [f"- content: {er.generated_summary}"]
-    if er.business_problem:
-        lines.append(f"- businessProblem: {er.business_problem}")
-    if er.business_capability:
-        lines.append(f"- businessCapability: {er.business_capability}")
-    if er.key_terms:
-        lines.append(f"- keyTerms: {', '.join(er.key_terms)}")
-    if er.stakeholders:
-        lines.append(f"- stakeholders: {', '.join(er.stakeholders)}")
-    if er.systems_and_products:
-        lines.append(f"- systemsAndProducts: {', '.join(er.systems_and_products)}")
-    return "\n".join(lines)
+    return f"- content: {er.generated_summary}"
 
 
 def stage_value_streams(pairs: Sequence[tuple[VSContext, Sequence[ValueStage]]]) -> str:
