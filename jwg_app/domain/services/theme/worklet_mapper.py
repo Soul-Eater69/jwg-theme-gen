@@ -1,8 +1,9 @@
-"""Maps between the Worklet envelope and the theme-generation domain.
+"""
+Maps between the Worklet envelope and the theme-generation domain.
 
-All Worklet <-> domain translation lives here, so the handler orchestrates and never indexes
-worklet properties by hand. The property-name strings are the only coupling to the worklet shape
-and are kept in one place here.
+All Worklet-to-domain translation lives here, so the handler orchestrates and never indexes worklet
+properties by hand. The property-name strings are the only coupling to the worklet shape and are
+kept together in this module.
 """
 
 from __future__ import annotations
@@ -24,7 +25,17 @@ from jwg_app.domain.models.theme_generation import (
 
 
 def get_property(worklet: Worklet, name: str, default: Any = None) -> Any:
-    """Return the first property value with ``name``, or ``default`` when absent."""
+    """
+    Read a worklet property value by name.
+
+    Args:
+        worklet: The worklet to read from.
+        name: The property name to look up.
+        default: The value to return when the property is absent.
+
+    Returns:
+        The first property value with ``name``, or ``default`` when absent.
+    """
     for p in worklet.properties:
         if p.property_name == name:
             return p.property_value
@@ -32,7 +43,16 @@ def get_property(worklet: Worklet, name: str, default: Any = None) -> Any:
 
 
 def set_property(worklet: Worklet, name: str, value: Any) -> None:
-    """Set an existing property value or append a new property when absent."""
+    """
+    Write a worklet property value by name.
+
+    Updates the existing property when present, otherwise appends a new one.
+
+    Args:
+        worklet: The worklet to write to.
+        name: The property name to set.
+        value: The value to store.
+    """
     for p in worklet.properties:
         if p.property_name == name:
             p.property_value = value
@@ -71,12 +91,28 @@ class ThemeProps:
 
 
 def value_stream_id(vs_worklet: Worklet) -> str:
-    """Return the external Value Stream id used for catalogue lookups."""
+    """
+    Read the external Value Stream id used for catalogue lookups.
+
+    Args:
+        vs_worklet: The value-stream worklet.
+
+    Returns:
+        The external Value Stream id.
+    """
     return _worklet_identity(vs_worklet)
 
 
 def to_er_context(er_worklet: Worklet) -> ERContext:
-    """Extract the ticket fields that ground all theme-generation prompts."""
+    """
+    Extract the ticket fields that ground every theme-generation prompt.
+
+    Args:
+        er_worklet: The engagement-request worklet.
+
+    Returns:
+        The engagement-request context.
+    """
     summary = get_property(er_worklet, ERProps.DOCS_SUMMARY)
     summary = summary if isinstance(summary, dict) else {}  # guarded: the next lines call .get()
 
@@ -93,7 +129,16 @@ def to_er_context(er_worklet: Worklet) -> ERContext:
 
 
 def to_vs_context(vs_worklet: Worklet, catalogue: AzureSQLData) -> VSContext:
-    """Combine VS worklet fields with governed catalogue enrichment."""
+    """
+    Combine value-stream worklet fields with the catalogue enrichment.
+
+    Args:
+        vs_worklet: The value-stream worklet.
+        catalogue: The catalogue record for this value stream.
+
+    Returns:
+        The value-stream context.
+    """
     vs = catalogue.value_stream
 
     return VSContext(
@@ -115,7 +160,21 @@ def to_theme_worklet(
     l3: Sequence[L3Capability],
     l2: Sequence[L2Capability],
 ) -> Worklet:
-    """Build the unsaved THEME worklet returned to the API layer for persistence."""
+    """
+    Build the unsaved THEME worklet returned to the API layer for persistence.
+
+    Args:
+        vs_worklet: The parent value-stream worklet.
+        title: The Theme title.
+        description: The Theme description.
+        business_needs: The Business Needs text.
+        selected_stages: The stages selected for the value stream.
+        l3: The selected L3 capabilities.
+        l2: The derived L2 capabilities.
+
+    Returns:
+        The unsaved THEME worklet.
+    """
     theme = Worklet(
         id=None,
         worklet_type=WorkletType.THEME,
@@ -143,4 +202,5 @@ def to_theme_worklet(
 
 
 def _worklet_identity(worklet: Worklet) -> str:
+    """Return the worklet's external source id, falling back to its internal id."""
     return worklet.source_id or worklet.id or ""

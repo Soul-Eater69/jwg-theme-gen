@@ -1,20 +1,20 @@
-"""Theme generation handler.
+"""
+Theme generation handler.
 
-Given the ER worklet and the approved Value Stream worklets, generates one THEME worklet per
-Value Stream. The heavy calls are batched across all approved Value Streams (which is why ``run``
-takes the VS list): stage selection, description body + framing, and capabilities each run once
-for every VS; only business needs runs per VS. Generation reads the ER's raw ticket text.
+Given the engagement-request worklet and the approved value-stream worklets, generates one THEME
+worklet per value stream. The work runs in three steps:
 
-Order of work:
-  1. Ticket-level, in parallel: description body, description framing (all VS), stage selection (all VS).
-  2. After stages, in parallel: capabilities (one merged call, all VS) and business needs (per VS).
-  3. Per VS: derive L2 capabilities, then assemble the THEME worklet (description = framing + body).
+    1. Ticket-level, in parallel: description body, description framing (all value streams), and
+       stage selection (all value streams).
+    2. After stages, in parallel: capability selection (one merged call) and business needs
+       (per value stream).
+    3. Per value stream: derive the L2 capabilities, then assemble the THEME worklet (description is
+       the value stream's framing over the shared body).
 
 Orchestration lives here; the theme helpers live in the ``theme`` subpackage: prompt strings come
-from ``theme.prompt_builder``, the LLM output is turned into final values by ``theme.output_resolver``,
-and worklet/domain translation is in ``theme.worklet_mapper``. Output schemas are in
-``models.theme_generation``.
-The platform client and catalogue reader are injected; the handler never persists.
+from ``theme.prompt_builder``, the LLM output is turned into final values by
+``theme.output_resolver``, and worklet-to-domain translation is in ``theme.worklet_mapper``. The
+output schemas are in ``models.theme_generation``.
 """
 
 from __future__ import annotations
@@ -50,22 +50,48 @@ logger = logging.getLogger(__name__)
 
 
 class ThemeGenerationHandler:
+    """
+    Generates Jira THEME worklets from an engagement request and its approved value streams.
+
+    The heavy LLM calls are batched across all approved value streams: stage selection, description
+    body and framing, and capability selection each run once for every value stream, while business
+    needs runs per value stream. Generation reads the engagement request's raw ticket text.
+
+    The platform client and catalogue reader are injected, so the handler orchestrates only: it
+    never talks to Azure directly and never persists the worklets it returns.
+    """
+
     def __init__(
         self,
         azure_sql_client: ThemeCatalogueReader,
         platform_client: PlatformClient,
         user_config: Union[str, dict],
     ) -> None:
+        """
+        Store the injected clients and load the theme-generation usecase config.
+
+        Args:
+            azure_sql_client: Reads the catalogue for the approved value streams.
+            platform_client: Sends the structured LLM calls.
+            user_config: A config file path to load, or an already-loaded config dict.
+        """
         self._azure_sql = azure_sql_client
         self._platform = platform_client
         config = load_config(user_config) if isinstance(user_config, str) else user_config
         # the theme_generation usecase: { prompt: {key: {system_role, static_prompt}}, model_params }
         self._usecase = config["theme_generation"]
 
-    # ---- public ----------------------------------------------------------------------
-
     async def run(self, er_worklet: Worklet, vs_worklets: list[Worklet]) -> list[Worklet]:
-        """One unsaved THEME worklet per approved Value Stream; the caller persists them."""
+        """
+        Generate one unsaved THEME worklet per approved value stream.
+
+        Args:
+            er_worklet: The engagement-request worklet that grounds generation.
+            vs_worklets: The approved value-stream worklets, one Theme each.
+
+        Returns:
+            One unsaved THEME worklet per approved value stream, for the caller to persist.
+        """
         er = mapper.to_er_context(er_worklet)
         vs_ids = [mapper.value_stream_id(w) for w in vs_worklets]
         catalogue = await self._azure_sql.fetch_theme_inputs(vs_ids)
@@ -88,7 +114,7 @@ class ThemeGenerationHandler:
 
         # Step 2 — after stages: capabilities (one merged call) and business needs (per VS).
         l3_by_stage, needs_by_vs = await asyncio.gather(
-            self._capabilities(er, vs_list, stages_by_vs, catalogue),
+            self._capability_selection(er, vs_list, stages_by_vs, catalogue),
             self._business_needs(er, vs_list, stages_by_vs),
         )
 
@@ -101,8 +127,8 @@ class ThemeGenerationHandler:
             themes.append(
                 mapper.to_theme_worklet(
                     worklet,
-                    title=resolver.theme_title(er, vs),
-                    description=resolver.assemble_description(framings.get(vs_id, ""), body),
+                    title=f"{er.idmt_ticket_title} -- {vs.vs_name}",
+                    description=self._theme_description(framings.get(vs_id, ""), body),
                     business_needs=needs_by_vs.get(vs_id, ""),
                     selected_stages=stages,
                     l3=l3,
@@ -112,34 +138,77 @@ class ThemeGenerationHandler:
         logger.info("theme generation finished: %d theme(s) produced", len(themes))
         return themes
 
-    # ---- Step 1: description body (1 call, VS-agnostic) ------------------------------
-
     async def _description_body(self, er: ERContext) -> str:
-        """Generate the shared description body reused by every Theme for the ER."""
-        out = await self._call(
+        """
+        Generate the shared description body reused by every Theme for this ticket.
+
+        Args:
+            er: The engagement-request context.
+
+        Returns:
+            The shared description body text.
+        """
+        result = await self._call(
             "description_body", TextOut, ticket_context=prompts.ticket_context(er)
         )
-        return out.text
-
-    # ---- Step 1: description framing (1 call, all VS) -------------------------------
+        return result.text
 
     async def _description_framings(self, er: ERContext, vs_list: list[VSContext]) -> dict[str, str]:
-        """Generate the per-VS opening paragraph for each Theme description."""
+        """
+        Generate the per-value-stream opening paragraph for each Theme description.
+
+        Args:
+            er: The engagement-request context.
+            vs_list: The approved value streams.
+
+        Returns:
+            The framing paragraph for each value stream, keyed by value-stream id.
+        """
         if not vs_list:
             return {}
-        out = await self._call(
+        picks = await self._call(
             "description_framing", FramingsOut,
             ticket_context=prompts.ticket_context(er),
             value_streams=prompts.framing_value_streams(vs_list),
         )
-        return resolver.resolve_framings(out, [vs.vs_id for vs in vs_list])
+        # A value stream the model skips simply has no framing; its description still has the body.
+        return {f.value_stream_id: f.text for f in picks.framings}
 
-    # ---- Step 1: stage selection (1 call, all VS) ----------------------------------
+    @staticmethod
+    def _theme_description(framing: str, body: str) -> str:
+        """
+        Assemble a Theme description from the value stream's framing paragraph and the shared body.
+
+        Either part is omitted when empty.
+
+        Args:
+            framing: The value stream's opening paragraph.
+            body: The shared description body.
+
+        Returns:
+            The assembled Theme description.
+        """
+        parts = []
+        if framing.strip():
+            parts.append("Theme Description:\n" + framing.strip())
+        if body.strip():
+            parts.append(body.strip())
+        return "\n\n".join(parts)
 
     async def _stage_selection(
         self, er: ERContext, vs_list: list[VSContext], catalogue: dict[str, AzureSQLData]
     ) -> dict[str, list[SelectedStage]]:
-        """Select governed lifecycle stages for every approved Value Stream in one LLM call."""
+        """
+        Select the catalogue lifecycle stages for every approved value stream in one LLM call.
+
+        Args:
+            er: The engagement-request context.
+            vs_list: The approved value streams.
+            catalogue: The catalogue read, keyed by value-stream id.
+
+        Returns:
+            The selected stages for each value stream, keyed by value-stream id.
+        """
         pairs = [
             (vs, catalogue[vs.vs_id].stage_list)
             for vs in vs_list
@@ -147,23 +216,32 @@ class ThemeGenerationHandler:
         ]
         if not pairs:
             return {}
-        out = await self._call(
+        picks = await self._call(
             "stage_selection", BatchedStageSelection,
             ticket_context=prompts.ticket_context(er),
             value_streams=prompts.stage_value_streams(pairs),
         )
-        return resolver.resolve_stages(out, {vs.vs_id: stages for vs, stages in pairs})
+        return resolver.resolve_stages(picks, {vs.vs_id: stages for vs, stages in pairs})
 
-    # ---- Step 2: capabilities (1 merged call, all VS) ------------------------------
-
-    async def _capabilities(
+    async def _capability_selection(
         self,
         er: ERContext,
         vs_list: list[VSContext],
         stages_by_vs: dict[str, list[SelectedStage]],
         catalogue: dict[str, AzureSQLData],
     ) -> dict[str, list[L3Capability]]:
-        """Select governed L3 capabilities for all selected stages in one merged LLM call."""
+        """
+        Select the catalogue L3 capabilities for every selected stage in one merged LLM call.
+
+        Args:
+            er: The engagement-request context.
+            vs_list: The approved value streams.
+            stages_by_vs: The selected stages for each value stream.
+            catalogue: The catalogue read, keyed by value-stream id.
+
+        Returns:
+            The selected L3 capabilities for each stage, keyed by stage id.
+        """
         groups: list[tuple[VSContext, list[tuple[SelectedStage, list[L3Capability]]]]] = []
         candidates_by_stage: dict[str, list[L3Capability]] = {}
         for vs in vs_list:
@@ -180,24 +258,32 @@ class ThemeGenerationHandler:
                 groups.append((vs, stage_caps))
         if not groups:
             return {}
-        out = await self._call(
+        picks = await self._call(
             "capability_selection", BatchedCapabilitySelection,
             ticket_context=prompts.ticket_context(er),
             value_streams=prompts.capability_value_streams(groups),
         )
-        return resolver.resolve_l3(out, candidates_by_stage)
-
-    # ---- Step 2: business needs (per VS, parallel) ---------------------------------
+        return resolver.resolve_l3(picks, candidates_by_stage)
 
     async def _business_needs(
         self, er: ERContext, vs_list: list[VSContext], stages_by_vs: dict[str, list[SelectedStage]]
     ) -> dict[str, str]:
-        """Generate Business Needs independently for each VS that has selected stages."""
+        """
+        Generate the Business Needs text for each value stream that has selected stages.
+
+        Args:
+            er: The engagement-request context.
+            vs_list: The approved value streams.
+            stages_by_vs: The selected stages for each value stream.
+
+        Returns:
+            The Business Needs text for each value stream, keyed by value-stream id.
+        """
         async def for_vs(vs: VSContext) -> tuple[str, str]:
             stages = stages_by_vs.get(vs.vs_id, [])
             if not stages:
                 return vs.vs_id, ""
-            out = await self._call(
+            result = await self._call(
                 "business_needs", TextOut,
                 ticket_context=prompts.ticket_context(er),
                 value_stream_id=vs.vs_id,
@@ -206,15 +292,28 @@ class ThemeGenerationHandler:
                 value_proposition=vs.value_proposition,
                 selected_stages=prompts.selected_stages(stages),
             )
-            return vs.vs_id, out.text
+            return vs.vs_id, result.text
 
         return dict(await asyncio.gather(*(for_vs(vs) for vs in vs_list)))
 
-    # ---- LLM call --------------------------------------------------------------------
-
     async def _call(self, key: str, schema: type[BaseModel], **values: Any) -> BaseModel:
-        """Build the messages for ``key`` (system_role + filled static_prompt), send them via the
-        chat-completions API constrained to ``schema``, and validate the structured result."""
+        """
+        Run one structured LLM call for the given prompt key.
+
+        Builds the system and user messages from the usecase prompt config, sends them through the
+        chat-completions API constrained to ``schema``, and validates the structured result.
+
+        Args:
+            key: The prompt key in the theme-generation usecase config.
+            schema: The pydantic model the response must validate against.
+            **values: The template variables that fill the prompt's static text.
+
+        Returns:
+            The validated ``schema`` instance.
+
+        Raises:
+            CustomException: If the platform returns an error, a non-200 status, or no data.
+        """
         prompt = self._usecase["prompt"][key]
         messages = [
             {"role": "system", "content": prompt["system_role"]},

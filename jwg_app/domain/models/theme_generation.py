@@ -1,9 +1,10 @@
-"""Theme generation data models.
+"""
+Theme generation data models.
 
-Input contexts (ER + VS), the governed catalogue payload (Azure SQL), the per-call LLM output
-schemas (batched across all approved Value Streams), and the resolved capability records. These
-are the contracts the theme generation handler and its prompts read/write; the API ``Worklet``
-shape comes from the shared models and is assembled at the boundary.
+Input contexts (engagement request + value stream), the catalogue payload (Azure SQL), the per-call
+LLM output schemas (batched across all approved value streams), and the resolved capability records.
+These are the contracts the theme generation handler and its prompts read and write; the API
+``Worklet`` shape comes from the shared models and is assembled at the boundary.
 """
 
 from __future__ import annotations
@@ -15,15 +16,13 @@ from pydantic import BaseModel, Field
 from jwg_app.domain.models.base import CamelModel
 
 
-# ---- input contexts -------------------------------------------------------------------
-
 class VSContext(BaseModel):
     """An approved Value Stream a Theme is generated for."""
 
     vs_id: str
     vs_name: str
     vs_description: str
-    # governed-catalogue enrichment (stage selection reads both; business needs the proposition):
+    # catalogue enrichment (stage selection reads both; business needs reads the proposition):
     value_proposition: str = ""
     trigger: str = ""
 
@@ -44,10 +43,8 @@ class ERContext(BaseModel):
     systems_and_products: List[str] = Field(default_factory=list)
 
 
-# ---- governed catalogue (Azure SQL) ---------------------------------------------------
-
 class ValueStage(BaseModel):
-    """A candidate lifecycle stage from the governed catalogue for a Value Stream."""
+    """A candidate lifecycle stage from the catalogue for a Value Stream."""
 
     stage_id: str
     stage_name: str
@@ -82,14 +79,14 @@ class L2Capability(CamelModel):
 
 
 class VSCatalogue(BaseModel):
-    """A Value Stream's governed attributes (enrich generation)."""
+    """A Value Stream's catalogue attributes (enrich generation)."""
 
     value_proposition: str = ""
     trigger: str = ""
 
 
 class AzureSQLData(BaseModel):
-    """One Value Stream's governed read: its attributes, candidate stages, and full L3 list (each
+    """One Value Stream's catalogue read: its attributes, candidate stages, and full L3 list (each
     L3 carries its parent L2 inline). The catalogue is fetched for all approved VS at once and keyed
     by ``vs_id`` (``dict[str, AzureSQLData]``)."""
 
@@ -97,8 +94,6 @@ class AzureSQLData(BaseModel):
     stage_list: List[ValueStage] = Field(default_factory=list)
     l3_capabilities: List[L3Capability] = Field(default_factory=list)
 
-
-# ---- resolved domain records ----------------------------------------------------------
 
 class SelectedStage(CamelModel):
     """A stage the work runs through. Names are canonical from the catalogue; the model echoes the
@@ -109,9 +104,8 @@ class SelectedStage(CamelModel):
     reason: str = ""
 
 
-# ---- LLM output schemas (batched; one structured payload per prompt) ------------------
-# The RAW model picks ``agenerate`` validates against; the handler resolves them against the
-# governed catalogue into the domain records above.
+# The raw model picks ``agenerate`` validates against; the handler resolves them against the
+# catalogue into the domain records above.
 
 class VsStageSelection(CamelModel):
     """One Value Stream's stage picks (batched stage-selection entry). Empty -> the architect
