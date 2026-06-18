@@ -22,7 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, Union
+from typing import Any
 
 from pydantic import BaseModel
 from worklet_data_api import Worklet
@@ -65,7 +65,7 @@ class ThemeGenerationHandler:
         self,
         azure_sql_client: ThemeCatalogueReader,
         platform_client: PlatformClient,
-        user_config: Union[str, dict],
+        user_config_path: str,
     ) -> None:
         """
         Store the injected clients and load the theme-generation usecase config.
@@ -73,11 +73,11 @@ class ThemeGenerationHandler:
         Args:
             azure_sql_client: Reads the catalogue for the approved value streams.
             platform_client: Sends the structured LLM calls.
-            user_config: A config file path to load, or an already-loaded config dict.
+            user_config_path: Path to user_config.yaml; loaded once here.
         """
         self._azure_sql = azure_sql_client
         self._platform = platform_client
-        config = load_config(user_config) if isinstance(user_config, str) else user_config
+        config = load_config(user_config_path)
         # the theme_generation usecase: { prompt: {key: {system_role, static_prompt}}, model_params }
         self._usecase = config["theme_generation"]
 
@@ -91,10 +91,26 @@ class ThemeGenerationHandler:
 
         Returns:
             One unsaved THEME worklet per approved value stream, for the caller to persist.
+
+        Raises:
+            CustomException: 404 if the ER or VS worklets are missing; 400 if no stages resolve
+                for any value stream; 503 if Azure SQL or the LLM is unavailable.
         """
+        if er_worklet is None or not vs_worklets:
+            raise CustomException(
+                status_code=404, detail="ER worklet or VS worklet not found"
+            )
+
         er = mapper.to_er_context(er_worklet)
         vs_ids = [mapper.value_stream_id(w) for w in vs_worklets]
-        catalogue = await self._azure_sql.fetch_theme_inputs(vs_ids)
+        try:
+            catalogue = await self._azure_sql.fetch_theme_inputs(vs_ids)
+        except CustomException:
+            raise
+        except Exception as exc:
+            raise CustomException(
+                status_code=503, detail="Azure SQL service unavailable"
+            ) from exc
         vs_by_id = {
             vs_id: mapper.to_vs_context(worklet, catalogue.get(vs_id, ValueStreamCatalogue()))
             for worklet, vs_id in zip(vs_worklets, vs_ids)
@@ -111,6 +127,11 @@ class ThemeGenerationHandler:
             self._description_framings(er, vs_list),
             self._stage_selection(er, vs_list, catalogue),
         )
+
+        if not any(stages_by_vs.get(vs.vs_id) for vs in vs_list):
+            raise CustomException(
+                status_code=400, detail="No valid stages resolved for this Value Stream"
+            )
 
         # Step 2 — after stages: capabilities (one merged call) and business needs (per VS).
         l3_by_stage, needs_by_vs = await asyncio.gather(
@@ -312,7 +333,7 @@ class ThemeGenerationHandler:
             The validated ``schema`` instance.
 
         Raises:
-            CustomException: If the platform returns an error, a non-200 status, or no data.
+            CustomException: 503 if the LLM gateway returns an error, a non-200 status, or no data.
         """
         prompt = self._usecase["prompt"][key]
         messages = [
@@ -326,11 +347,10 @@ class ThemeGenerationHandler:
             output_function=schema,
         )
         if error or status_code != 200 or data is None:
-            logger.error(
-                "LLM call %s failed (status=%s): %s", key, status_code, error or "no data returned"
-            )
+            reason = error or "no data returned"
+            logger.error("LLM call %s failed (status=%s): %s", key, status_code, reason)
             raise CustomException(
-                status_code=status_code, detail=error or "platform agenerate returned no data"
+                status_code=503, detail=f"LLM service unavailable: {reason}"
             )
         if isinstance(data, str):  # structured output returned as a JSON string
             data = json.loads(data)
