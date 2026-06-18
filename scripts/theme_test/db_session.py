@@ -72,6 +72,14 @@ async def session_scope() -> AsyncIterator[AsyncSession]:
 
 async def _check() -> None:
     """Open one async session and run SELECT 1 to confirm connectivity."""
+    s = _DbSettings()
+    print(
+        "DB config read from .env: "
+        f"DRIVER={s.DB_DRIVER!r} SERVER={s.DB_SERVER!r} DATABASE={s.DATABASE!r} "
+        f"UID={s.DB_USERNAME!r} AUTH={s.DB_AUTHENTICATION!r} "
+        f"ENCRYPT={s.DB_ENCRYPT!r} TRUST={s.DB_TRUST_SERVER_CERTIFICATE!r} "
+        f"(password set: {bool(s.DB_PASSWORD)})"
+    )
     async with session_scope() as session:
         result = await session.execute(text("SELECT 1"))
         print("DB session OK, SELECT 1 ->", result.scalar())
