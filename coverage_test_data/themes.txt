@@ -1,0 +1,23 @@
+THEME: CP 2027 Medicare Advantage Prior Authorization Modernization -- Prior Authorization and Utilization Management
+
+Description.
+This theme delivers an end-to-end redesign of the Medicare Advantage prior authorization experience. It introduces intelligent electronic prior authorization intake that validates required fields at submission and attaches the correct clinical documentation templates by service category, and an automated clinical criteria engine that evaluates requests against medical policy and InterQual or MCG criteria to auto-approve clearly-meets-criteria requests while routing ambiguous or high-cost requests to a Utilization Management nurse. The Utilization Management worklist is redesigned to prioritize expedited requests and flag requests approaching CMS timeliness thresholds.
+
+Business Needs.
+The solution must accept structured ePA submissions through the provider portal and the X12 278 and FHIR Prior Authorization Support transactions. It must evaluate incoming requests against machine-readable clinical criteria and record the specific criteria met for auto-approved requests in an auditable decision record. Pended requests must generate a structured missing-information request visible to the submitting provider. Denials must capture the clinical rationale and medical policy citation and trigger member and provider correspondence with Medicare Advantage appeal rights. The system must support peer-to-peer review scheduling.
+
+THEME: CP 2027 Medicare Advantage Prior Authorization Modernization -- Member and Provider Digital Experience
+
+Description.
+This theme provides real-time prior authorization transparency in the member portal and the provider portal and a unified authorization view in the contact center agent desktop. Members can see authorization status, understand pended and denied statuses in plain language, and view expected decision timelines. Providers can submit requests, see real-time status and decision rationale, and respond to missing-information requests by uploading documentation directly.
+
+Business Needs.
+The member portal must surface authorization status affecting the member's care with plain-language explanations and estimated timelines. The provider portal must support ePA submission, real-time status, decision rationale, and direct document upload in response to missing-information requests. The contact center agent desktop must present a real-time authorization view so agents resolve status inquiries on first contact. The experience must be accessible and function on mobile devices.
+
+THEME: CP 2027 Medicare Advantage Prior Authorization Modernization -- Regulatory Reporting and Analytics
+
+Description.
+This theme delivers operational dashboards and regulatory reporting for the prior authorization lifecycle. It captures every authorization state transition with timestamps so turnaround is measured precisely from receipt to decision, and reports volume, turnaround against CMS standards, auto-approval rate, nurse-touch rate, denial rate, and appeal overturn rate by market, product, and provider group.
+
+Business Needs.
+The data model must capture each authorization state transition with timestamps. Dashboards must report prior authorization volume by service category, turnaround time against CMS timeliness standards, auto-approval and denial rates, and appeal volume and overturn rates, sliceable by market, product, and provider group. Regulatory reporting must support CMS Medicare Advantage timeliness and organization determination requirements. Analytics must identify providers with high pend rates for targeted education.
