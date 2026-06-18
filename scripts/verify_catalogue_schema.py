@@ -37,13 +37,31 @@ SCHEMA = "idp_impact_analyis"  # note: this is the real (misspelled) schema name
 # --------------------------------------------------------------------------- #
 
 
+def resolve_odbc_driver() -> str:
+    """Use ODBC_DRIVER if it's installed, else fall back to any installed SQL Server driver."""
+    import pyodbc
+
+    installed = list(pyodbc.drivers())
+    if ODBC_DRIVER in installed:
+        driver = ODBC_DRIVER
+    else:
+        driver = next((d for d in installed if "SQL Server" in d), None)
+    if driver is None:
+        raise SystemExit(
+            f"No SQL Server ODBC driver found. Installed drivers: {installed}\n"
+            "Install 'ODBC Driver 18 for SQL Server' or set ODBC_DRIVER to one of the above."
+        )
+    print(f"Using ODBC driver: {driver}")
+    return driver
+
+
 def build_url() -> str:
     if SQLALCHEMY_URL:
         return SQLALCHEMY_URL
     from urllib.parse import quote_plus
 
     odbc = (
-        f"DRIVER={{{ODBC_DRIVER}}};SERVER={SERVER},{PORT};DATABASE={DATABASE};"
+        f"DRIVER={{{resolve_odbc_driver()}}};SERVER={SERVER},{PORT};DATABASE={DATABASE};"
         f"UID={USERNAME};PWD={PASSWORD};Encrypt=yes;TrustServerCertificate=no;"
         f"Connection Timeout=30;"
     )
