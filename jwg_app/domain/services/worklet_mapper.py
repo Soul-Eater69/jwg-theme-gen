@@ -17,6 +17,7 @@ from jwg_app.domain.models.theme_generation import (
     SelectedStage,
     VSContext,
 )
+from jwg_app.domain.models.base import RecordState, WorkletType
 from jwg_app.domain.models.worklet import Worklet, get_property, set_property
 
 
@@ -99,21 +100,22 @@ def to_theme_worklet(
     """Build the unsaved THEME worklet returned to the API layer for persistence."""
     theme = Worklet(
         id=None,
-        workletType="THEME",
-        parentWorkletId=vs_worklet.id,
-        sourceId=None,
-        state="C",
+        worklet_type=WorkletType.THEME,
+        parent_worklet_id=vs_worklet.id,
+        source_id=None,
+        state=RecordState.CREATED,
     )
 
+    # CamelModel forces by_alias on model_dump, so the property values serialize camelCase.
     properties = {
         ThemeProps.TITLE: title,
         ThemeProps.DESCRIPTION: description,
         ThemeProps.BUSINESS_NEEDS: business_needs,
         ThemeProps.RATIONALE: "",
         ThemeProps.GENERATED_BY_LLM: True,
-        ThemeProps.SELECTED_STAGES: [s.model_dump(by_alias=True) for s in selected_stages],
-        ThemeProps.L3: [c.model_dump(by_alias=True) for c in l3],
-        ThemeProps.L2: [c.model_dump(by_alias=True) for c in l2],
+        ThemeProps.SELECTED_STAGES: [s.model_dump() for s in selected_stages],
+        ThemeProps.L3: [c.model_dump() for c in l3],
+        ThemeProps.L2: [c.model_dump() for c in l2],
     }
 
     for name, value in properties.items():
@@ -123,4 +125,4 @@ def to_theme_worklet(
 
 
 def _worklet_identity(worklet: Worklet) -> str:
-    return worklet.sourceId or worklet.id or ""
+    return worklet.source_id or worklet.id or ""

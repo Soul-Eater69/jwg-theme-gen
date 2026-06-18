@@ -1,46 +1,31 @@
-"""Worklet envelope (reconstructed from the API request/response examples).
+"""Worklet property helpers.
 
-STAGING ONLY — on integration, replace this with the prod `Worklet` model import. A worklet is
-a generic typed envelope whose payload is a list of name/value ``properties``. Helpers read/write
-a property by name so the handler doesn't index the list by hand.
+The ``Worklet`` type comes from the platform ``worklet_data_api`` package — we do not define it.
+These helpers read/write a property by name on the worklet's ``Property`` list so the handler and
+mapper never index it by hand.
 """
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any
 
-from pydantic import BaseModel, Field
+from worklet_data_api import Worklet
 
-
-class WorkletProperty(BaseModel):
-    propertyName: str
-    propertyValue: Any = None
-
-
-class Worklet(BaseModel):
-    id: Optional[str] = None
-    workletType: str = ""               # "ER" | "VS" | "THEME"
-    parentWorkletId: Optional[str] = None
-    sourceId: Optional[str] = None
-    properties: List[WorkletProperty] = Field(default_factory=list)
-    state: Optional[str] = None         # e.g. "C"
-    currentUser: Optional[dict] = None
-    workletMap: dict = Field(default_factory=dict)
-    userHistory: list = Field(default_factory=list)
+from jwg_app.domain.models.base import Property
 
 
 def get_property(worklet: Worklet, name: str, default: Any = None) -> Any:
     """Return the first property value with ``name``, or ``default`` when absent."""
     for p in worklet.properties:
-        if p.propertyName == name:
-            return p.propertyValue
+        if p.property_name == name:
+            return p.property_value
     return default
 
 
 def set_property(worklet: Worklet, name: str, value: Any) -> None:
     """Set an existing property value or append a new property when absent."""
     for p in worklet.properties:
-        if p.propertyName == name:
-            p.propertyValue = value
+        if p.property_name == name:
+            p.property_value = value
             return
-    worklet.properties.append(WorkletProperty(propertyName=name, propertyValue=value))
+    worklet.properties.append(Property(property_name=name, property_value=value))

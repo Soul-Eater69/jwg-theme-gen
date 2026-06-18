@@ -23,6 +23,7 @@ from typing import Any, Union
 
 from pydantic import BaseModel
 
+from jwg_app.domain.exceptions.custom_exception import CustomException
 from jwg_app.domain.interfaces.platform_client import PlatformClient
 from jwg_app.domain.interfaces.theme_catalogue import ThemeCatalogueReader
 from jwg_app.domain.models.theme_generation import (
@@ -201,8 +202,8 @@ class ThemeGenerationHandler:
     # ---- LLM call --------------------------------------------------------------------
 
     async def _call(self, key: str, schema: type[BaseModel], **values: Any) -> BaseModel:
-        """Build the prompt for ``key`` from the usecase config (system_role + filled static_prompt),
-        send it with the usecase model params, and validate the result against ``schema``."""
+        """Build the messages for ``key`` (system_role + filled static_prompt), send them via the
+        chat-completions API constrained to ``schema``, and validate the structured result."""
         prompt = self._usecase["prompt"][key]
         messages = [
             {"role": "system", "content": prompt["system_role"]},
@@ -210,13 +211,14 @@ class ThemeGenerationHandler:
         ]
         data, error, status_code = await self._platform.agenerate(
             message=messages,
-            output_function=schema,
             model_params=self._usecase.get("model_params"),
+            output_function=schema,
         )
         if error or status_code != 200 or data is None:
-            # TODO: align with the prod handler pattern (return a result object vs raise).
-            raise RuntimeError(f"platform agenerate failed ({status_code}): {error or 'no data'}")
-        if isinstance(data, str):  # text fell through; parse it
+            raise CustomException(
+                status_code=status_code, detail=error or "platform agenerate returned no data"
+            )
+        if isinstance(data, str):  # structured output returned as a JSON string
             data = json.loads(data)
         return schema.model_validate(data)
 
