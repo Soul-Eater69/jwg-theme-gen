@@ -22,6 +22,7 @@ import json
 from typing import Any, Union
 
 from pydantic import BaseModel
+from worklet_data_api import Worklet
 
 from jwg_app.domain.exceptions.custom_exception import CustomException
 from jwg_app.domain.interfaces.platform_client import PlatformClient
@@ -37,7 +38,6 @@ from jwg_app.domain.models.theme_generation import (
     TextOut,
     VSContext,
 )
-from jwg_app.domain.models.worklet import Worklet
 from jwg_app.domain.services import theme_generation_helper as helper
 from jwg_app.domain.services import theme_worklet_mapper as mapper
 from jwg_app.domain.services.utils import load_config

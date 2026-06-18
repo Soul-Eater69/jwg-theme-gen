@@ -8,7 +8,11 @@ and are kept in one place here.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
+from worklet_data_api import Worklet
+
+from jwg_app.domain.models.base import Property, RecordState, WorkletType
 from jwg_app.domain.models.theme_generation import (
     AzureSQLData,
     ERContext,
@@ -17,8 +21,23 @@ from jwg_app.domain.models.theme_generation import (
     SelectedStage,
     VSContext,
 )
-from jwg_app.domain.models.base import RecordState, WorkletType
-from jwg_app.domain.models.worklet import Worklet, get_property, set_property
+
+
+def get_property(worklet: Worklet, name: str, default: Any = None) -> Any:
+    """Return the first property value with ``name``, or ``default`` when absent."""
+    for p in worklet.properties:
+        if p.property_name == name:
+            return p.property_value
+    return default
+
+
+def set_property(worklet: Worklet, name: str, value: Any) -> None:
+    """Set an existing property value or append a new property when absent."""
+    for p in worklet.properties:
+        if p.property_name == name:
+            p.property_value = value
+            return
+    worklet.properties.append(Property(property_name=name, property_value=value))
 
 
 class ERProps:
