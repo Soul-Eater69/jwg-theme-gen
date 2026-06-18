@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import Any, Union
 
 from pydantic import BaseModel
@@ -44,6 +45,8 @@ from jwg_app.domain.services.theme import output_resolver as resolver
 from jwg_app.domain.services.theme import prompt_builder as prompts
 from jwg_app.domain.services.theme import worklet_mapper as mapper
 from jwg_app.domain.services.utils import load_config
+
+logger = logging.getLogger(__name__)
 
 
 class ThemeGenerationHandler:
@@ -71,6 +74,10 @@ class ThemeGenerationHandler:
             for worklet, vs_id in zip(vs_worklets, vs_ids)
         }
         vs_list = list(vs_by_id.values())
+        logger.info(
+            "theme generation started: ticket=%s, %d approved value stream(s)",
+            er.idmt_ticket_title, len(vs_list),
+        )
 
         # Step 1 — ticket-level batched calls, in parallel.
         body, framings, stages_by_vs = await asyncio.gather(
@@ -102,6 +109,7 @@ class ThemeGenerationHandler:
                     l2=resolver.derive_l2(l3),
                 )
             )
+        logger.info("theme generation finished: %d theme(s) produced", len(themes))
         return themes
 
     # ---- Step 1: description body (1 call, VS-agnostic) ------------------------------
@@ -212,12 +220,16 @@ class ThemeGenerationHandler:
             {"role": "system", "content": prompt["system_role"]},
             {"role": "user", "content": prompt["static_prompt"].format(**values)},
         ]
+        logger.debug("calling LLM for %s", key)
         data, error, status_code = await self._platform.agenerate(
             message=messages,
             model_params=self._usecase.get("model_params"),
             output_function=schema,
         )
         if error or status_code != 200 or data is None:
+            logger.error(
+                "LLM call %s failed (status=%s): %s", key, status_code, error or "no data returned"
+            )
             raise CustomException(
                 status_code=status_code, detail=error or "platform agenerate returned no data"
             )
