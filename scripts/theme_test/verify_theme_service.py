@@ -29,7 +29,7 @@ import argparse  # noqa: E402
 import asyncio  # noqa: E402
 from typing import List  # noqa: E402
 
-from db_session import session_scope  # noqa: E402
+from db_session import dispose, session_scope  # noqa: E402
 
 from jwg_app.domain.services.theme_service import ThemeService  # noqa: E402
 from jwg_app.infrastructure.repositories import (  # noqa: E402
@@ -52,8 +52,11 @@ def build_service(session) -> ThemeService:
 
 
 async def main(vs_ids: List[str]) -> None:
-    async with session_scope() as session:
-        catalogue = await build_service(session).fetch_theme_inputs(vs_ids)
+    try:
+        async with session_scope() as session:
+            catalogue = await build_service(session).fetch_theme_inputs(vs_ids)
+    finally:
+        await dispose()
 
     failures = 0
     for vs_id in vs_ids:
@@ -72,8 +75,9 @@ async def main(vs_ids: List[str]) -> None:
         print(f"\nstages ({len(cat.stage_list)}):")
         for stage in cat.stage_list:
             print(f"  [{stage.stage_id}] {stage.stage_name}")
-            print(f"      entrance: {stage.entrance_criteria!r}")
-            print(f"      exit:     {stage.exit_criteria!r}")
+            print(f"      description: {stage.stage_description!r}")
+            print(f"      entrance:    {stage.entrance_criteria!r}")
+            print(f"      exit:        {stage.exit_criteria!r}")
 
         print(f"\nL3 capabilities ({len(cat.l3_capabilities)}):")
         for l3 in cat.l3_capabilities:

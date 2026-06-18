@@ -215,6 +215,10 @@ async def main(args: argparse.Namespace) -> None:
     finally:
         if hasattr(platform, "aclose"):
             await platform.aclose()
+        if args.real_db:
+            from db_session import dispose
+
+            await dispose()
 
 
 if __name__ == "__main__":

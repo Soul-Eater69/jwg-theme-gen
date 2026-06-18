@@ -51,15 +51,16 @@ def _database_url() -> str:
     return f"mssql+aioodbc:///?odbc_connect={quote_plus(odbc)}"
 
 
+_engine = None
 _session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 
 
 def _factory() -> async_sessionmaker[AsyncSession]:
-    """Build the async session factory on first use."""
-    global _session_factory
+    """Build the async engine + session factory on first use."""
+    global _engine, _session_factory
     if _session_factory is None:
-        engine = create_async_engine(_database_url(), pool_pre_ping=True)
-        _session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        _engine = create_async_engine(_database_url(), pool_pre_ping=True)
+        _session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
     return _session_factory
 
 
@@ -68,6 +69,15 @@ async def session_scope() -> AsyncIterator[AsyncSession]:
     """Yield one async session for a test."""
     async with _factory()() as session:
         yield session
+
+
+async def dispose() -> None:
+    """Dispose the engine at the end of a script (avoids 'unclosed connection' warnings)."""
+    global _engine, _session_factory
+    if _engine is not None:
+        await _engine.dispose()
+        _engine = None
+        _session_factory = None
 
 
 async def _check() -> None:
@@ -80,9 +90,12 @@ async def _check() -> None:
         f"ENCRYPT={s.DB_ENCRYPT!r} TRUST={s.DB_TRUST_SERVER_CERTIFICATE!r} "
         f"(password set: {bool(s.DB_PASSWORD)})"
     )
-    async with session_scope() as session:
-        result = await session.execute(text("SELECT 1"))
-        print("DB session OK, SELECT 1 ->", result.scalar())
+    try:
+        async with session_scope() as session:
+            result = await session.execute(text("SELECT 1"))
+            print("DB session OK, SELECT 1 ->", result.scalar())
+    finally:
+        await dispose()
 
 
 if __name__ == "__main__":
