@@ -1,10 +1,11 @@
 """
 Theme generation data models.
 
-Input contexts (engagement request + value stream), the catalogue payload (Azure SQL), the per-call
-LLM output schemas (batched across all approved value streams), and the resolved capability records.
-These are the contracts the theme generation handler and its prompts read and write; the API
-``Worklet`` shape comes from the shared models and is assembled at the boundary.
+Input contexts (engagement request + value stream), the catalogue read (value stream attributes,
+its stages, and its L3 capabilities), the per-call LLM output schemas (batched across all approved
+value streams), and the resolved capability records. These are the contracts the theme generation
+handler and its prompts read and write; the API ``Worklet`` shape comes from the shared models and
+is assembled at the boundary.
 """
 
 from __future__ import annotations
@@ -78,19 +79,19 @@ class L2Capability(CamelModel):
     selected: bool = True
 
 
-class VSCatalogue(BaseModel):
-    """A Value Stream's catalogue attributes (enrich generation)."""
+class ValueStreamAttributes(BaseModel):
+    """A Value Stream's own catalogue attributes (enrich generation)."""
 
     value_proposition: str = ""
     trigger: str = ""
 
 
-class AzureSQLData(BaseModel):
+class ValueStreamCatalogue(BaseModel):
     """One Value Stream's catalogue read: its attributes, candidate stages, and full L3 list (each
-    L3 carries its parent L2 inline). The catalogue is fetched for all approved VS at once and keyed
-    by ``vs_id`` (``dict[str, AzureSQLData]``)."""
+    L3 carries its parent L2 inline). The catalogue is fetched for all approved value streams at once
+    and keyed by ``vs_id`` (``dict[str, ValueStreamCatalogue]``)."""
 
-    value_stream: VSCatalogue = Field(default_factory=VSCatalogue)
+    value_stream: ValueStreamAttributes = Field(default_factory=ValueStreamAttributes)
     stage_list: List[ValueStage] = Field(default_factory=list)
     l3_capabilities: List[L3Capability] = Field(default_factory=list)
 

@@ -12,11 +12,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Protocol
 
-from jwg_app.domain.models.theme_generation import AzureSQLData
+from jwg_app.domain.models.theme_generation import ValueStreamCatalogue
 
 
 class ThemeCatalogueReader(Protocol):
-    async def fetch_theme_inputs(self, vs_ids: Sequence[str]) -> dict[str, AzureSQLData]:
+    async def fetch_theme_inputs(self, vs_ids: Sequence[str]) -> dict[str, ValueStreamCatalogue]:
         """
         Read the catalogue for every approved value stream in one batched call.
 

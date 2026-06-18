@@ -31,7 +31,7 @@ from jwg_app.domain.exceptions.custom_exception import CustomException
 from jwg_app.domain.interfaces.platform_client import PlatformClient
 from jwg_app.domain.interfaces.theme_catalogue import ThemeCatalogueReader
 from jwg_app.domain.models.theme_generation import (
-    AzureSQLData,
+    ValueStreamCatalogue,
     BatchedCapabilitySelection,
     BatchedStageSelection,
     ERContext,
@@ -96,7 +96,7 @@ class ThemeGenerationHandler:
         vs_ids = [mapper.value_stream_id(w) for w in vs_worklets]
         catalogue = await self._azure_sql.fetch_theme_inputs(vs_ids)
         vs_by_id = {
-            vs_id: mapper.to_vs_context(worklet, catalogue.get(vs_id, AzureSQLData()))
+            vs_id: mapper.to_vs_context(worklet, catalogue.get(vs_id, ValueStreamCatalogue()))
             for worklet, vs_id in zip(vs_worklets, vs_ids)
         }
         vs_list = list(vs_by_id.values())
@@ -196,7 +196,7 @@ class ThemeGenerationHandler:
         return "\n\n".join(parts)
 
     async def _stage_selection(
-        self, er: ERContext, vs_list: list[VSContext], catalogue: dict[str, AzureSQLData]
+        self, er: ERContext, vs_list: list[VSContext], catalogue: dict[str, ValueStreamCatalogue]
     ) -> dict[str, list[SelectedStage]]:
         """
         Select the catalogue lifecycle stages for every approved value stream in one LLM call.
@@ -228,7 +228,7 @@ class ThemeGenerationHandler:
         er: ERContext,
         vs_list: list[VSContext],
         stages_by_vs: dict[str, list[SelectedStage]],
-        catalogue: dict[str, AzureSQLData],
+        catalogue: dict[str, ValueStreamCatalogue],
     ) -> dict[str, list[L3Capability]]:
         """
         Select the catalogue L3 capabilities for every selected stage in one merged LLM call.

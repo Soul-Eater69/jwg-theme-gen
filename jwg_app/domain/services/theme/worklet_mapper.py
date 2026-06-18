@@ -15,7 +15,7 @@ from worklet_data_api import Worklet
 
 from jwg_app.domain.models.base import Property, RecordState, WorkletType
 from jwg_app.domain.models.theme_generation import (
-    AzureSQLData,
+    ValueStreamCatalogue,
     ERContext,
     L2Capability,
     L3Capability,
@@ -128,7 +128,7 @@ def to_er_context(er_worklet: Worklet) -> ERContext:
     )
 
 
-def to_vs_context(vs_worklet: Worklet, catalogue: AzureSQLData) -> VSContext:
+def to_vs_context(vs_worklet: Worklet, catalogue: ValueStreamCatalogue) -> VSContext:
     """
     Combine value-stream worklet fields with the catalogue enrichment.
 
