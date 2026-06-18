@@ -10,8 +10,10 @@ Order of work:
   2. After stages, in parallel: capabilities (one merged call, all VS) and business needs (per VS).
   3. Per VS: derive L2 capabilities, then assemble the THEME worklet (description = framing + body).
 
-Orchestration lives here; prompt rendering and output resolution live in ``theme_generation_helper``,
-worklet/domain translation in ``theme_worklet_mapper``, and the output schemas in ``models.theme_generation``.
+Orchestration lives here; the theme helpers live in the ``theme`` subpackage: prompt strings come
+from ``theme.prompt_builder``, the LLM output is turned into final values by ``theme.output_resolver``,
+and worklet/domain translation is in ``theme.worklet_mapper``. Output schemas are in
+``models.theme_generation``.
 The platform client and catalogue reader are injected; the handler never persists.
 """
 
@@ -38,8 +40,9 @@ from jwg_app.domain.models.theme_generation import (
     TextOut,
     VSContext,
 )
-from jwg_app.domain.services import theme_generation_helper as helper
-from jwg_app.domain.services import theme_worklet_mapper as mapper
+from jwg_app.domain.services.theme import output_resolver as resolver
+from jwg_app.domain.services.theme import prompt_builder as prompts
+from jwg_app.domain.services.theme import worklet_mapper as mapper
 from jwg_app.domain.services.utils import load_config
 
 
@@ -91,12 +94,12 @@ class ThemeGenerationHandler:
             themes.append(
                 mapper.to_theme_worklet(
                     worklet,
-                    title=helper.theme_title(er, vs),
-                    description=helper.assemble_description(framings.get(vs_id, ""), body),
+                    title=resolver.theme_title(er, vs),
+                    description=resolver.assemble_description(framings.get(vs_id, ""), body),
                     business_needs=needs_by_vs.get(vs_id, ""),
                     selected_stages=stages,
                     l3=l3,
-                    l2=helper.derive_l2(l3),
+                    l2=resolver.derive_l2(l3),
                 )
             )
         return themes
@@ -106,7 +109,7 @@ class ThemeGenerationHandler:
     async def _description_body(self, er: ERContext) -> str:
         """Generate the shared description body reused by every Theme for the ER."""
         out = await self._call(
-            "description_body", TextOut, ticket_context=helper.ticket_context(er)
+            "description_body", TextOut, ticket_context=prompts.ticket_context(er)
         )
         return out.text
 
@@ -118,10 +121,10 @@ class ThemeGenerationHandler:
             return {}
         out = await self._call(
             "description_framing", FramingsOut,
-            ticket_context=helper.ticket_context(er),
-            value_streams=helper.framing_value_streams(vs_list),
+            ticket_context=prompts.ticket_context(er),
+            value_streams=prompts.framing_value_streams(vs_list),
         )
-        return helper.resolve_framings(out, [vs.vs_id for vs in vs_list])
+        return resolver.resolve_framings(out, [vs.vs_id for vs in vs_list])
 
     # ---- Step 1: stage selection (1 call, all VS) ----------------------------------
 
@@ -138,10 +141,10 @@ class ThemeGenerationHandler:
             return {}
         out = await self._call(
             "stage_selection", BatchedStageSelection,
-            ticket_context=helper.ticket_context(er),
-            value_streams=helper.stage_value_streams(pairs),
+            ticket_context=prompts.ticket_context(er),
+            value_streams=prompts.stage_value_streams(pairs),
         )
-        return helper.resolve_stages_for_all(out, {vs.vs_id: stages for vs, stages in pairs})
+        return resolver.resolve_stages(out, {vs.vs_id: stages for vs, stages in pairs})
 
     # ---- Step 2: capabilities (1 merged call, all VS) ------------------------------
 
@@ -171,10 +174,10 @@ class ThemeGenerationHandler:
             return {}
         out = await self._call(
             "capability_selection", BatchedCapabilitySelection,
-            ticket_context=helper.ticket_context(er),
-            value_streams=helper.capability_value_streams(groups),
+            ticket_context=prompts.ticket_context(er),
+            value_streams=prompts.capability_value_streams(groups),
         )
-        return helper.resolve_l3_merged(out, candidates_by_stage)
+        return resolver.resolve_l3(out, candidates_by_stage)
 
     # ---- Step 2: business needs (per VS, parallel) ---------------------------------
 
@@ -188,12 +191,12 @@ class ThemeGenerationHandler:
                 return vs.vs_id, ""
             out = await self._call(
                 "business_needs", TextOut,
-                ticket_context=helper.ticket_context(er),
+                ticket_context=prompts.ticket_context(er),
                 value_stream_id=vs.vs_id,
                 value_stream_name=vs.vs_name,
                 value_stream_description=vs.vs_description,
                 value_proposition=vs.value_proposition,
-                selected_stages=helper.render_selected_stages(stages),
+                selected_stages=prompts.selected_stages(stages),
             )
             return vs.vs_id, out.text
 
