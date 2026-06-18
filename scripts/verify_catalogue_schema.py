@@ -91,13 +91,13 @@ def main() -> None:
         f"""
         SELECT
           COUNT(*) AS total_rows,
-          SUM(CASE WHEN capability_id IN
-                (SELECT l3_capability_id FROM {SCHEMA}.idp_sightline_l3_capabilities)
-              THEN 1 ELSE 0 END) AS matches_l3,
-          SUM(CASE WHEN capability_id IN
-                (SELECT l2_capability_id FROM {SCHEMA}.idp_sightline_l2_capabilities)
-              THEN 1 ELSE 0 END) AS matches_l2
-        FROM {SCHEMA}.idp_sightline_value_stream_capability
+          SUM(CASE WHEN l3.l3_capability_id IS NOT NULL THEN 1 ELSE 0 END) AS matches_l3,
+          SUM(CASE WHEN l2.l2_capability_id IS NOT NULL THEN 1 ELSE 0 END) AS matches_l2
+        FROM {SCHEMA}.idp_sightline_value_stream_capability j
+        LEFT JOIN {SCHEMA}.idp_sightline_l3_capabilities l3
+          ON l3.l3_capability_id = j.capability_id
+        LEFT JOIN {SCHEMA}.idp_sightline_l2_capabilities l2
+          ON l2.l2_capability_id = j.capability_id
         """,
     )
 
