@@ -128,7 +128,7 @@ def main() -> None:
         cursor,
         "3. Stages joined from the junction (entrance/exit criteria present?)",
         f"""
-        SELECT TOP 20 DISTINCT
+        SELECT TOP 20
           j.value_stream_id,
           s.value_stream_stage_id,
           s.value_stream_stage_name,
