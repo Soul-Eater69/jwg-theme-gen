@@ -140,7 +140,9 @@ theme_generation:
         level, not stage-level requirements.
 
         Return ONE consolidated text block (field "text") in exactly this structure. Omit any line or
-        section whose source evidence is absent - never write "TBD", never invent.
+        section whose source evidence is absent - drop the whole line or heading silently. Never invent,
+        and never emit a placeholder: do NOT write "(None)", "N/A", "TBD", or a line explaining that the
+        content does not describe it. If a section has no grounded content, leave it out entirely.
 
         Product Availability:  (SHORT structured values - include a line ONLY when the content
         EXPLICITLY states that value. If the content does not explicitly state it, OMIT that whole line -
@@ -201,8 +203,8 @@ theme_generation:
 
         Each paragraph must be distinct and focused on its own value stream; do not describe the
         whole idea, and do not repeat availability lists or feature bullets (those live in the shared
-        body). Business-facing, Jira-style prose, concrete and grounded - no generic filler, no "TBD",
-        no invention, no ticket/group/epic ids.
+        body). Business-facing, Jira-style prose, concrete and grounded - no generic filler, no
+        placeholders ("(None)", "N/A", "TBD"), no invention, no ticket/group/epic ids.
 
         Return one entry per value stream: its valueStreamId and the paragraph text.
       static_prompt: |
@@ -231,7 +233,10 @@ theme_generation:
 
         Return ONE consolidated text block (field "text") - the final Business Needs draft for all
         selected stages, in exactly this structure. Omit any section whose source evidence is
-        absent; never invent, never write "TBD".
+        absent - drop the whole heading silently. Never invent, and never emit a placeholder for an
+        empty section: do NOT write "(None)", "N/A", "TBD", or a line explaining that the content does
+        not describe it. If a section (including Operational Training or Operational Reporting) has no
+        grounded content, leave it out entirely - no heading, no note.
 
         Value Stage: <stage name>
 
