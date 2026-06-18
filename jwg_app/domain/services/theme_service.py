@@ -40,7 +40,7 @@ from jwg_app.infrastructure.repositories.value_stream_stage_repository import (
 logger = logging.getLogger(__name__)
 
 
-class ThemeCatalogueService:
+class ThemeService:
     """Service layer that assembles the theme-generation catalogue for approved value streams."""
 
     def __init__(
