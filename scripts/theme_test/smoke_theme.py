@@ -2,11 +2,13 @@
 
 Wires the ThemeGenerationHandler with a fake catalogue reader and (by default) a fake platform
 client, so the full generate-theme pipeline runs end to end with no DB and no LLM. Pass --real-llm to
-hit the real IDP gateway (set the LLM_/IDP_ env vars first; see platform_client.build_platform_client).
+use the prod PlatformRestClient (set PLATFORM_BASE_URL / PLATFORM_AUTH_TOKEN / PLATFORM_APP_ID /
+PLATFORM_VERIFY_SSL first; get the bearer token from `python -m scripts.print_token` in the teg repo).
 
 Run from the repo root:
     python scripts/theme_test/smoke_theme.py
     python scripts/theme_test/smoke_theme.py --real-llm
+    python scripts/theme_test/smoke_theme.py --real-db --real-llm
 """
 
 from __future__ import annotations
@@ -14,8 +16,8 @@ from __future__ import annotations
 import os
 import sys
 
-# Put this folder (worklet_data_api stub, platform_client, idp_auth) and the repo root (jwg_app) on
-# the path BEFORE importing the handler, so `from worklet_data_api import Worklet` resolves to the stub.
+# Put this folder (worklet_data_api stub) and the repo root (jwg_app) on the path BEFORE importing
+# the handler, so `from worklet_data_api import Worklet` resolves to the stub.
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 for _p in (HERE, ROOT):
@@ -189,10 +191,15 @@ def _build_real_service(session):
 
 async def main(args: argparse.Namespace) -> None:
     if args.real_llm:
-        from platform_client import build_platform_client
+        from jwg_app.infrastructure.external.platform_rest_client import PlatformRestClient
 
-        platform = build_platform_client()
-        print("# using REAL platform client (IDP gateway)")
+        platform = PlatformRestClient(
+            base_url=os.environ.get("PLATFORM_BASE_URL", ""),
+            auth_token=os.environ.get("PLATFORM_AUTH_TOKEN", ""),  # bearer from scripts.print_token
+            verify_ssl=os.environ.get("PLATFORM_VERIFY_SSL", "false").lower() == "true",
+            app_id=os.environ.get("PLATFORM_APP_ID") or None,
+        )
+        print("# using REAL platform client (PlatformRestClient)")
     else:
         platform = FakePlatformClient()
         print("# using FAKE platform client (no LLM)")
@@ -225,7 +232,7 @@ async def main(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--real-llm", action="store_true", help="hit the real IDP gateway (needs env)")
+    parser.add_argument("--real-llm", action="store_true", help="use prod PlatformRestClient (needs PLATFORM_* env)")
     parser.add_argument("--real-db", action="store_true", help="use real ThemeService over Azure SQL (needs env + aioodbc)")
     main_args = parser.parse_args()
     asyncio.run(main(main_args))
