@@ -46,8 +46,13 @@ from jwg_app.domain.services.theme_generation_handler import (  # noqa: E402
 
 CONFIG_PATH = os.path.join(ROOT, "configs", "user_config.yaml")
 TICKET_ID = "IDMT-19761"
-VS_ID = "VSR00074583"
-VS_NAME = "Procurement Management"
+
+# Multiple approved value streams -> exercises the batched stage/capability calls, the per-VS
+# parallel business-needs, and the resolver's cross-VS reassignment. Use real VSR ids for --real-db.
+VALUE_STREAMS = [
+    ("VSR00074583", "Procurement Management", "Manage end-to-end procurement of physical assets."),
+    ("VSR00074584", "Claims Adjudication", "Adjudicate and price member and provider claims."),
+]
 
 
 # --- fakes ---------------------------------------------------------------------------------
@@ -165,21 +170,25 @@ def build_er_worklet() -> Worklet:
             _prop("title", "New physical asset procurement initiative"),
             _prop(
                 "rawText",
-                "The business needs a faster way to procure approved physical assets, including "
-                "order management and vendor contract negotiation for the new fiscal year.",
+                "The business needs a faster way to procure approved physical assets (order "
+                "management and vendor contract negotiation) and to streamline claims adjudication "
+                "and pricing for members and providers in the new fiscal year.",
             ),
         ],
     )
 
 
-def build_vs_worklet() -> Worklet:
-    return Worklet(
-        source_id=VS_ID,
-        properties=[
-            _prop("title", VS_NAME),
-            _prop("valueStreamDescription", "Manage end-to-end procurement of physical assets."),
-        ],
-    )
+def build_vs_worklets() -> List[Worklet]:
+    return [
+        Worklet(
+            source_id=vs_id,
+            properties=[
+                _prop("title", name),
+                _prop("valueStreamDescription", description),
+            ],
+        )
+        for vs_id, name, description in VALUE_STREAMS
+    ]
 
 
 # --- run -----------------------------------------------------------------------------------
@@ -265,7 +274,8 @@ async def main(args: argparse.Namespace) -> None:
     if args.debug:
         platform = _DebugPlatform(platform)
 
-    er, vs = build_er_worklet(), build_vs_worklet()
+    er, vs_worklets = build_er_worklet(), build_vs_worklets()
+    print(f"# {len(vs_worklets)} value stream(s): {[vs for vs, _, _ in VALUE_STREAMS]}")
     try:
         if args.real_db:
             from db_session import session_scope
@@ -273,11 +283,11 @@ async def main(args: argparse.Namespace) -> None:
             print("# using REAL catalogue (Azure SQL via ThemeService)")
             async with session_scope() as session:
                 handler = ThemeGenerationHandler(_build_real_service(session), platform, CONFIG_PATH)
-                themes = await handler.run(er, [vs])
+                themes = await handler.run(er, vs_worklets)
         else:
             print("# using FAKE catalogue (no DB)")
             handler = ThemeGenerationHandler(FakeCatalogueReader(), platform, CONFIG_PATH)
-            themes = await handler.run(er, [vs])
+            themes = await handler.run(er, vs_worklets)
         _print_themes(themes)
     finally:
         if hasattr(platform, "aclose"):
