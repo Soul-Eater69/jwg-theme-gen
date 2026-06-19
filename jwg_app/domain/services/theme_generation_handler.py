@@ -105,8 +105,7 @@ class ThemeGenerationHandler:
             CustomException: A core failure that aborts the whole request - 404 if the ER or VS
                 worklets are missing; 503 if Azure SQL or a core LLM call (description body/framing,
                 stage selection, capabilities) is unavailable after retries. Per-VS failures do NOT
-                raise; they are returned as failed worklets (e.g. 503 if business needs is
-                unavailable, 400 if the value stream has no governed stages).
+                raise; they are returned as failed worklets (503 if business needs is unavailable).
         """
         if er_worklet is None or not vs_worklets:
             raise CustomException(
@@ -181,12 +180,6 @@ class ThemeGenerationHandler:
         """
         stages = stages_by_vs.get(vs.vs_id, [])
         try:
-            if not stages:
-                # No governed stages for this value stream (none in the catalogue) -> no theme to
-                # build. Flagged as a per-VS failure so the others still succeed.
-                raise CustomException(
-                    status_code=400, detail="No valid stages resolved for this Value Stream"
-                )
             business_needs = await self._business_needs_for_vs(er, vs, stages)
             l3 = [cap for stage in stages for cap in l3_by_stage.get(stage.stage_id, [])]
             return mapper.to_theme_worklet(

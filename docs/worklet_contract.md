@@ -111,12 +111,11 @@ tiers:
   stage selection, capabilities). These are shared/foundational, so if any fails after retries the
   request fails: `404` (missing worklets), `503` (Azure SQL or a core LLM call unavailable).
 - **Per-VS failure → that value stream is flagged, others still succeed.** After the core phase,
-  each value stream's own flow (business needs + assembly) runs in isolation. If one fails, its
-  worklet comes back with `generationStatus="failed"` + `generationError`, and the remaining value
-  streams return complete themes; the request does **not** raise. Per-VS failures include `503`
-  (business needs unavailable after retries) and `400` (the value stream has no governed stages in
-  the catalogue - nothing to build). Note: when the LLM selects no stage for a value stream that
-  *does* have catalogue stages, the resolver falls back to all of them (not a failure).
+  each value stream's own flow (business needs + assembly) runs in isolation. If one fails after
+  retries (e.g. business needs unavailable, `503`), its worklet comes back with
+  `generationStatus="failed"` + `generationError`, and the remaining value streams return complete
+  themes; the request does **not** raise. Note: when the LLM selects no stage for a value stream,
+  the resolver falls back to all of that value stream's catalogue stages (not a failure).
 
 Transient LLM failures (429 / 5xx / timeout) are retried per the theme retry config before either
 tier treats the call as failed.

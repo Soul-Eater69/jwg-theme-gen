@@ -165,26 +165,6 @@ def test_catalogue_failure_raises_503():
     assert exc.value.status_code == 503
 
 
-def test_no_stages_for_vs_is_flagged_not_raised():
-    # catalogue returns an empty ValueStreamCatalogue (no governed stages) for vs1
-    handler = ThemeGenerationHandler(FakeCatalogue({}), FakePlatform(), CONFIG_PATH)
-    themes = asyncio.run(handler.run(_er(), [_vs("vs1")]))
-    assert len(themes) == 1
-    assert mapper.is_failed_theme(themes[0])
-    assert "400" in mapper.get_property(themes[0], mapper.ThemeProps.GENERATION_ERROR, "")
-
-
-def test_one_vs_without_stages_others_still_succeed():
-    # vs1 has governed stages, vs2 has none -> vs1 complete, vs2 flagged failed (not a global abort)
-    catalogue = _catalogue_with_stages("vs1")  # only vs1 has stages
-    handler = ThemeGenerationHandler(catalogue, FakePlatform(), CONFIG_PATH)
-    themes = asyncio.run(handler.run(_er(), [_vs("vs1"), _vs("vs2")]))
-    assert len(themes) == 2
-    by_status = {mapper.get_property(t, mapper.ThemeProps.GENERATION_STATUS): t for t in themes}
-    assert set(by_status) == {"complete", "failed"}
-    assert "400" in mapper.get_property(by_status["failed"], mapper.ThemeProps.GENERATION_ERROR, "")
-
-
 def test_non_retryable_llm_failure_raises_503():
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), FailingPlatform(), CONFIG_PATH)
     with pytest.raises(CustomException) as exc:
