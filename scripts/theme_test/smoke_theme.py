@@ -2,8 +2,9 @@
 
 Wires the ThemeGenerationHandler with a fake catalogue reader and (by default) a fake platform
 client, so the full generate-theme pipeline runs end to end with no DB and no LLM. Pass --real-llm to
-use the prod PlatformRestClient (set PLATFORM_BASE_URL / PLATFORM_AUTH_TOKEN / PLATFORM_APP_ID /
-PLATFORM_VERIFY_SSL first; get the bearer token from `python -m scripts.print_token` in the teg repo).
+use the prod PlatformRestClient, configured from the app's existing settings in .env
+(CORE_PLATFORM_ENDPOINT / VERIFY_SSL / APP_ID) plus PLATFORM_AUTH_TOKEN (the bearer from
+`python -m scripts.print_token` in the teg repo).
 
 Run from the repo root:
     python scripts/theme_test/smoke_theme.py
@@ -170,6 +171,34 @@ def _print_themes(themes: List[Worklet]) -> None:
         print("=" * 80)
 
 
+def _build_real_platform():
+    """Build the prod PlatformRestClient from the app's existing platform settings (read from .env).
+
+    Reads CORE_PLATFORM_ENDPOINT / VERIFY_SSL / APP_ID (same names as the prod Settings) plus
+    PLATFORM_AUTH_TOKEN (the bearer from scripts.print_token). A minimal reader is used so the full
+    Settings validation (Cosmos/Jira/...) is not required just to test.
+    """
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+
+    from jwg_app.infrastructure.external.platform_rest_client import PlatformRestClient
+
+    class _PlatformSettings(BaseSettings):
+        model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=True)
+
+        CORE_PLATFORM_ENDPOINT: str = ""
+        VERIFY_SSL: bool = False
+        APP_ID: str = ""
+        PLATFORM_AUTH_TOKEN: str = ""  # bearer from `python -m scripts.print_token` (teg)
+
+    cfg = _PlatformSettings()
+    return PlatformRestClient(
+        base_url=cfg.CORE_PLATFORM_ENDPOINT,
+        auth_token=cfg.PLATFORM_AUTH_TOKEN,
+        verify_ssl=cfg.VERIFY_SSL,
+        app_id=cfg.APP_ID or None,
+    )
+
+
 def _build_real_service(session):
     from jwg_app.domain.services.theme_service import ThemeService
     from jwg_app.infrastructure.repositories import (
@@ -191,15 +220,8 @@ def _build_real_service(session):
 
 async def main(args: argparse.Namespace) -> None:
     if args.real_llm:
-        from jwg_app.infrastructure.external.platform_rest_client import PlatformRestClient
-
-        platform = PlatformRestClient(
-            base_url=os.environ.get("PLATFORM_BASE_URL", ""),
-            auth_token=os.environ.get("PLATFORM_AUTH_TOKEN", ""),  # bearer from scripts.print_token
-            verify_ssl=os.environ.get("PLATFORM_VERIFY_SSL", "false").lower() == "true",
-            app_id=os.environ.get("PLATFORM_APP_ID") or None,
-        )
-        print("# using REAL platform client (PlatformRestClient)")
+        platform = _build_real_platform()
+        print("# using REAL platform client (PlatformRestClient, config from .env)")
     else:
         platform = FakePlatformClient()
         print("# using FAKE platform client (no LLM)")
