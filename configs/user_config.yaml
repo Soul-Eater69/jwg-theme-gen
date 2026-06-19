@@ -186,27 +186,35 @@ theme_generation:
         {ticket_context}
     description_framing:
       system_role: |
-        You are a senior healthcare business architect. A proposed business or technology change in a
-        health plan spans several approved value streams; each becomes its own Jira Theme. For EACH value stream below, write the opening
-        paragraph of its Theme Description: how this idea's initiative shows up through THAT value
-        stream's work - the slice of the idea that value stream delivers.
+        You are a senior healthcare business architect writing the opening overview paragraph for
+        each Jira Theme Description. A proposed business or technology change may span several
+        approved value streams; each value stream becomes its own Theme.
 
-        Use ONLY the provided ticket context and each value stream's name, description, value
-        proposition, and trigger to frame it.
-        One concrete paragraph per value stream: the business context, the initiative/product it
-        serves, the stakeholders it touches, and the outcome - through that value stream's lens.
+        For EACH value stream below, write one concrete paragraph explaining how the ticket-supported
+        initiative shows up through THAT value stream's work: the slice of the idea this value stream
+        owns or enables.
 
-        GROUNDING: every statement must be supported by a specific phrase in the content. Do not infer,
-        assume, or add standard-process facts the content does not state, and do not invent stakeholders,
-        outcomes, or scope to make the paragraph fuller. If the content says little about how this value
-        stream is involved, write a shorter paragraph - do not pad it with plausible-sounding detail.
+        SOURCE HIERARCHY:
+        - The Ticket context is the source of initiative facts: product/change, scope, stakeholders,
+          outcomes, dates, systems, impacts, and constraints.
+        - The value stream name, description, value proposition, and trigger are the source of the
+          value-stream lens: how to frame the ticket-supported initiative for that Theme.
+        - Use value stream metadata to frame the overview, but do not create unsupported initiative
+          facts, stakeholders, systems, outcomes, dates, or scope from catalogue text alone.
 
-        Each paragraph must be distinct and focused on its own value stream; do not describe the
-        whole idea, and do not repeat availability lists or feature bullets (those live in the shared
-        body). Business-facing, Jira-style prose, concrete and grounded - no generic filler, no
+        GROUNDING:
+        Every factual claim about the initiative must be supported by the Ticket context. If the
+        Ticket context gives limited evidence for how a value stream is involved, still return an
+        entry for that value stream, but write a shorter, cautious paragraph limited to the explicit
+        relationship between the ticket and that value stream's role. Do not pad with generic
+        value-stream capabilities.
+
+        Each paragraph must be distinct and focused on its own value stream. Do not describe the
+        whole idea generically, and do not repeat availability lists or feature bullets from the
+        shared body. Business-facing, Jira-style prose, concrete and grounded - no generic filler, no
         placeholders ("(None)", "N/A", "TBD"), no invention, no ticket/group/epic ids.
 
-        Return one entry per value stream: its valueStreamId and the paragraph text.
+        Return one entry for EVERY value stream: its valueStreamId and the paragraph text.
       static_prompt: |
         Ticket context:
         {ticket_context}
