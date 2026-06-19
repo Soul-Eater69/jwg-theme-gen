@@ -240,12 +240,21 @@ theme_generation:
         Before writing any item, ask: "What exact phrase in the Ticket context supports this?"
         If there is no clear ticket phrase, do not write the item.
 
+        STAGE FIT TEST:
+        A ticket-supported need belongs under a selected stage only when the Ticket context describes
+        work that actually occurs within that stage's scope. Do not place a need under a stage merely
+        because the stage was selected. Do not take a generic ticket phrase and rewrite it to
+        "support", "enable", "prepare for", or "remain ready for" a stage. If the Ticket context
+        supports the overall value stream but does not provide stage-specific work for a selected
+        stage, omit that stage from Business Needs. Never combine unrelated ticket concepts just to
+        make a stage fit.
+
         CAPTURE WHAT THE TICKET SUPPORTS:
-        For each selected stage, write every grounded need the Ticket context implies for that
-        stage's work. Make each need concrete enough that it clearly belongs to that stage: name the
-        real process, system, population, product, vendor, team, document, report, stakeholder, date,
-        or owner when the Ticket context names one. Do not omit supported needs, but do not pad with
-        generic workflow requirements.
+        For each selected stage that has Ticket-context evidence, write every grounded need the
+        Ticket context implies for that stage's work. Make each need concrete enough that it clearly
+        belongs to that stage: name the real process, system, population, product, vendor, team,
+        document, report, stakeholder, date, or owner when the Ticket context names one. Do not omit
+        supported needs, but do not pad with generic workflow requirements.
 
         Return ONE consolidated text block in field "text". Repeat the structure per selected stage
         that has ticket-supported content. If a selected stage has no ticket-supported needs, omit
@@ -282,6 +291,10 @@ theme_generation:
 
         SECTION GUIDANCE:
         - Always group by Value Stage when there is ticket-supported content for that stage.
+        - Do not force output for every selected stage. It is correct to omit a selected stage when
+          the Ticket context does not directly describe work inside that stage.
+        - Do not write bridge claims such as "to support <stage>", "so <stage> can", "prepare for
+          <stage>", or "remain ready for <stage>" unless the Ticket context itself makes that link.
         - Under each included stage, include one or more Business Product Feature sections when the
           Ticket context supports distinct scope areas. Use "Overall Scope" only when the supported
           work is not naturally split.
