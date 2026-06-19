@@ -16,13 +16,14 @@ Read by `to_er_context`. Generation grounds on the **raw ticket text only** ("ra
 
 | Domain field (`ERContext`) | Worklet source | Property name |
 | --- | --- | --- |
-| `idmt_ticket_id` | worklet identity | `source_id` (fallback `id`) |
 | `idmt_ticket_title` | property | `title` |
-| `generated_summary` | property | `rawText` |
+| `raw_text` | property | `rawText` |
 
-That is the entire ER input. Summary-derived fields (`businessProblem`, `businessCapability`,
-`keyTerms`, `stakeholders`, `systemsAndProducts`) are **not** used by generation — per the prompt I/O
-contract, the generation prompts read raw text only; the summary is a separate retrieval artifact.
+That is the entire ER input — two properties, `title` and `rawText`. `raw_text` is the raw ticket
+text generation reads ("raw to decide"). Summary-derived fields (`businessProblem`,
+`businessCapability`, `keyTerms`, `stakeholders`, `systemsAndProducts`) are **not** used by
+generation — per the prompt I/O contract, the prompts read raw text only; the summary is a separate
+retrieval artifact.
 
 ---
 

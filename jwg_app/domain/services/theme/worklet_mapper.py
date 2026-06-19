@@ -107,9 +107,8 @@ def to_er_context(er_worklet: Worklet) -> ERContext:
         The engagement-request context.
     """
     return ERContext(
-        idmt_ticket_id=_worklet_identity(er_worklet),
         idmt_ticket_title=get_property(er_worklet, ERProps.TITLE, ""),
-        generated_summary=get_property(er_worklet, ERProps.RAW_TEXT, ""),
+        raw_text=get_property(er_worklet, ERProps.RAW_TEXT, ""),
     )
 
 

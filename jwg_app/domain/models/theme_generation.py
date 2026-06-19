@@ -31,13 +31,11 @@ class VSContext(BaseModel):
 class ERContext(BaseModel):
     """The Engagement Request context read from the ER worklet.
 
-    ``generated_summary`` carries the RAW ticket text - the only ticket input generation reads
-    ("raw to decide"). Summary-derived fields are intentionally not part of generation.
+    ``raw_text`` is the raw ticket text - the only ticket input generation reads ("raw to decide").
     """
 
-    idmt_ticket_id: str
     idmt_ticket_title: str
-    generated_summary: str
+    raw_text: str
 
 
 class ValueStage(BaseModel):
