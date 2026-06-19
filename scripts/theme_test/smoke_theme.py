@@ -39,6 +39,7 @@ from jwg_app.domain.models.theme_generation import (  # noqa: E402
     ValueStreamAttributes,
     ValueStreamCatalogue,
 )
+from jwg_app.domain.services.theme import output_resolver as resolver  # noqa: E402
 from jwg_app.domain.services.theme import worklet_mapper as mapper  # noqa: E402
 from jwg_app.domain.services.theme_generation_handler import (  # noqa: E402
     ThemeGenerationHandler,
@@ -274,21 +275,17 @@ async def main(args: argparse.Namespace) -> None:
     if args.debug:
         platform = _DebugPlatform(platform)
 
-    er, vs_worklets = build_er_worklet(), build_vs_worklets()
-    print(f"# {len(vs_worklets)} value stream(s): {[vs for vs, _, _ in VALUE_STREAMS]}")
-    try:
-        if args.real_db:
-            from db_session import session_scope
+    er_worklet, vs_worklets = build_er_worklet(), build_vs_worklets()
+    vs_ids = [mapper.value_stream_id(w) for w in vs_worklets]
+    print(f"# {len(vs_worklets)} value stream(s): {vs_ids} | only={args.only}")
 
-            print("# using REAL catalogue (Azure SQL via ThemeService)")
-            async with session_scope() as session:
-                handler = ThemeGenerationHandler(_build_real_service(session), platform, CONFIG_PATH)
-                themes = await handler.run(er, vs_worklets)
+    try:
+        catalogue = await _fetch_catalogue(args, vs_ids)
+        handler = ThemeGenerationHandler(_StaticCatalogue(catalogue), platform, CONFIG_PATH)
+        if args.only == "all":
+            _print_themes(await handler.run(er_worklet, vs_worklets))
         else:
-            print("# using FAKE catalogue (no DB)")
-            handler = ThemeGenerationHandler(FakeCatalogueReader(), platform, CONFIG_PATH)
-            themes = await handler.run(er, vs_worklets)
-        _print_themes(themes)
+            await _run_only(handler, args.only, er_worklet, vs_worklets, catalogue)
     finally:
         if hasattr(platform, "aclose"):
             await platform.aclose()
@@ -301,10 +298,76 @@ async def main(args: argparse.Namespace) -> None:
                 pass  # older db_session without dispose(); engine closes on process exit
 
 
+class _StaticCatalogue:
+    """Returns an already-fetched catalogue dict, so each generator can run without re-hitting the DB."""
+
+    def __init__(self, data):
+        self._data = data
+
+    async def fetch_theme_inputs(self, vs_ids):
+        return {i: self._data.get(i, ValueStreamCatalogue()) for i in vs_ids}
+
+
+async def _fetch_catalogue(args, vs_ids):
+    if args.real_db:
+        from db_session import session_scope
+
+        print("# fetching catalogue from Azure SQL (ThemeService)")
+        async with session_scope() as session:
+            return await _build_real_service(session).fetch_theme_inputs(vs_ids)
+    print("# using FAKE catalogue (no DB)")
+    return await FakeCatalogueReader().fetch_theme_inputs(vs_ids)
+
+
+async def _run_only(handler, only, er_worklet, vs_worklets, catalogue):
+    """Run one generator (batched, as in the real pipeline) and print its output per value stream."""
+    er = mapper.to_er_context(er_worklet)
+    vs_ids = [mapper.value_stream_id(w) for w in vs_worklets]
+    vs_list = [mapper.to_vs_context(w, catalogue.get(vid, ValueStreamCatalogue())) for w, vid in zip(vs_worklets, vs_ids)]
+
+    # Compute the requested generator once (same calls the pipeline makes), then display per VS.
+    stages_by_vs, body, framings, needs_by_vs, l3_by_stage = {}, "", {}, {}, {}
+    if only in ("stages", "needs", "caps"):
+        stages_by_vs = await handler._stage_selection(er, vs_list, catalogue)
+    if only == "description":
+        body = await handler._description_body(er)
+        framings = await handler._description_framings(er, vs_list)
+    if only == "needs":
+        needs_by_vs = await handler._business_needs(er, vs_list, stages_by_vs)
+    if only == "caps":
+        l3_by_stage = await handler._capability_selection(er, vs_list, stages_by_vs, catalogue)
+
+    for vs in vs_list:
+        print("\n" + "=" * 80)
+        print(f"{vs.vs_name} ({vs.vs_id}) -- {only.upper()}")
+        print("-" * 80)
+        if only == "stages":
+            for s in stages_by_vs.get(vs.vs_id, []):
+                print(f"  [{s.stage_id}] {s.stage_name}" + (f" - {s.reason}" if s.reason else ""))
+        elif only == "description":
+            print(handler._theme_description(framings.get(vs.vs_id, ""), body))
+        elif only == "needs":
+            print(needs_by_vs.get(vs.vs_id, "") or "(none)")
+        elif only == "caps":
+            l3 = [c for s in stages_by_vs.get(vs.vs_id, []) for c in l3_by_stage.get(s.stage_id, [])]
+            print("L3:")
+            for c in l3:
+                print(f"  [{c.id}] {c.name}  (stage {c.stage_id}) -> L2 [{c.level_two_id}] {c.level_two_name}")
+            print("L2 (derived):")
+            for c in resolver.derive_l2(l3):
+                print(f"  [{c.id}] {c.name}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--real-llm", action="store_true", help="use prod PlatformRestClient (needs PLATFORM_* env)")
     parser.add_argument("--real-db", action="store_true", help="use real ThemeService over Azure SQL (needs env + aioodbc)")
     parser.add_argument("--debug", action="store_true", help="DEBUG logging + print each agenerate request/response")
+    parser.add_argument(
+        "--only",
+        choices=["all", "stages", "description", "needs", "caps"],
+        default="all",
+        help="generate just one part in isolation (to show a reviewer each output)",
+    )
     main_args = parser.parse_args()
     asyncio.run(main(main_args))
