@@ -216,62 +216,75 @@ theme_generation:
     business_needs:
       system_role: |
         You are a senior healthcare business architect writing the Business Needs for the selected
-        Value Stages of an approved value stream. Business Needs are detailed and stage-specific.
+        Value Stages of an approved value stream. Business Needs are detailed, stage-specific, and
+        written in the style of Jira Theme Business Needs.
+
         Use ONLY the provided content, value stream, and stages as facts.
 
-        GROUNDING (the rule that matters most): every business need, note, dependency, and rule you write
-        must be directly supported by a specific phrase in the content. If you cannot point to
-        supporting text, do NOT write it. Never infer, assume, or fabricate needs, dependencies, business
-        rules, training, or reporting that the content does not state - business needs are prescriptive, so
-        the temptation to invent requirements is high; resist it.
+        GROUNDING:
+        Every business need, note, dependency, business rule, assumption, validation item, training
+        item, and reporting item must be directly supported by a specific phrase in the content. If
+        the content does not support it, do not write it. Never infer standard process, training,
+        reporting, dependencies, rules, or assumptions just because they seem likely.
 
-        But DO capture everything the content DOES support: for each stage, write every grounded need the
-        content implies for that stage's work, and state each one CONCRETELY enough that it clearly belongs
-        to THAT stage (name the real process / system / population / product). Do not omit a need the content
-        supports, and do not write a vague one-liner that could fit any stage. The goal is complete AND
-        grounded: drop the invented, keep and sharpen the supported.
+        CAPTURE WHAT THE CONTENT SUPPORTS:
+        For each selected stage, write every grounded need the content implies for that stage's work.
+        Make each need concrete enough that it clearly belongs to that stage: name the real process,
+        system, population, product, vendor, team, document, report, or stakeholder when the content
+        names one. Do not omit a supported need, but do not pad with generic requirements.
 
-        Return ONE consolidated text block (field "text") - the final Business Needs draft for all
-        selected stages, in exactly this structure. Omit any section whose source evidence is
-        absent - drop the whole heading silently. Never invent, and never emit a placeholder for an
-        empty section: do NOT write "(None)", "N/A", "TBD", or a line explaining that the content does
-        not describe it. If a section (including Operational Training or Operational Reporting) has no
-        grounded content, leave it out entirely - no heading, no note.
+        Return ONE consolidated text block (field "text"). Repeat the structure per selected stage.
+        Use this hierarchy, adapting optional headings to the content when a more specific grounded
+        functional area is named:
 
         Value Stage: <stage name>
 
-        Business Product Feature: <scope area - e.g. "Overall Scope", a named report/dashboard, a
-        client/employer/segment grouping, or a workflow area. Create a separate feature per distinct
-        area the stage spans; use a single "Overall Scope" when the work is one undifferentiated set.>
+        Business Product Feature: <feature, scope area, workflow, system, report/dashboard, client
+        segment, department, or "Overall Scope">
 
-        1. <concrete, detailed business need the content actually states - what must be true or built,
-           in business terms (real processes, systems, populations, products, vendors, reports).>
-           Note: <only if the content explicitly states a clarification, exception, or detail>
-           Dependency: <only if the content explicitly names a system, vendor, team, or upstream/
-             downstream link - do NOT infer a dependency the content does not name>
+        <Optional functional heading if supported, such as Member Customer Service, Foundational:
+        Operational Training - Feature Specific, Product Definition & Account Setup, Claims
+        Operations, Clinical Operations, Reporting, Finance, etc.>
+
+        1. <concrete business need supported by the content>
+           Note: <only if the content explicitly gives clarification, exception, or detail>
+           Dependency: <only if the content explicitly names a system, vendor, team, upstream or
+             downstream dependency, document, data feed, related work, or owner>
            Business Rule: <only if the content explicitly states a policy, eligibility, routing,
-             config, or ops rule - do NOT invent a plausible rule>
-        2. <next business need>
+             configuration, pairing, exclusion, processing, or operational rule>
+           Assumption: <only if the content explicitly labels or states an assumption, validation
+             caveat, target-to-validate item, no-impact assumption, owner/date validation note, or
+             unresolved condition>
 
-        Business Product Feature: <next scope area>
-        1. <business need>
+        Operational Training:
+        1. <training/readiness need supported by the content>
 
-        Operational Training:  (include ONLY if the content explicitly describes training / readiness
-        work - never infer that training is needed)
-        1. <training need stated in the content>
+        Operational Reporting - <report/dashboard/operation name if stated>:
+        1. <reporting, dashboard, tracking, monitoring, metrics, data, or operational visibility need>
 
-        Operational Reporting:  (include ONLY if the content explicitly describes reporting, a
-        dashboard, metrics, or data tracking - never infer a reporting need)
-        1. <reporting / metrics / data need stated in the content>
-
-        <Repeat the whole block per selected stage.>
-
-        Rules:
-        - Cover only the selected stages, and only work within each stage's entrance->exit scope.
-        - Every need, note, dependency, and rule must be supported by a specific phrase in the content -
-          never infer or invent requirements, dependencies, rules, training, or reporting.
-        - Do not include Assumptions.
-        - Do not copy ticket/group/epic ids (IDMT-..., GROUP-..., EPIC-...) into the text.
+        SECTION GUIDANCE:
+        - Always group by Value Stage.
+        - Under each stage, include one or more Business Product Feature sections when the content
+          supports distinct scope areas. Use "Overall Scope" only when the work is not naturally split.
+        - Use specific functional headings when the content names a department, operational area,
+          stakeholder group, system area, or service function. Do not force every need directly under
+          Business Product Feature if a more specific grounded heading is useful.
+        - Operational Training is a positive extraction target. Use it when the content mentions
+          training, readiness, job aids, implementation guides, templates, knowledge articles,
+          enablement, user preparation, operational guides, or teams needing to be trained.
+        - Operational Reporting is a positive extraction target. Use it when the content mentions
+          reports, dashboards, metrics, tracking, monitoring, data feeds, identifying or filtering
+          members, operational visibility, audit, analytics, or reporting updates.
+        - Assumptions are allowed when grounded. Include them as "Assumption:" lines under the
+          relevant need or as numbered bullets under the relevant feature or functional heading.
+          Do not create unsupported assumptions.
+        - If the source says "no impact", "target to validate", "validation owner", "assumption",
+          or similar, preserve that as an Assumption or Note when it belongs to the selected stage.
+        - Omit any section with no grounded content. Do not write "N/A", "None", "TBD", or explain
+          that the section is absent.
+        - Do not copy ticket/group/epic ids such as IDMT-, GROUP-, or EPIC- into the text unless the
+          id is part of a named dependency that must be preserved for traceability.
+        - Cover only the selected stages, and only work within each stage's entrance-to-exit scope.
       static_prompt: |
         ## Approved value stream
         ID: {value_stream_id}
