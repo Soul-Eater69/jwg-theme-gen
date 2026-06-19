@@ -333,7 +333,12 @@ async def _run_only(handler, only, er_worklet, vs_worklets, catalogue):
         body = await handler._description_body(er)
         framings = await handler._description_framings(er, vs_list)
     if only == "needs":
-        needs_by_vs = await handler._business_needs(er, vs_list, stages_by_vs)
+        async def needs_for_vs(vs):
+            return vs.vs_id, await handler._business_needs_for_vs(
+                er, vs, stages_by_vs.get(vs.vs_id, [])
+            )
+
+        needs_by_vs = dict(await asyncio.gather(*(needs_for_vs(vs) for vs in vs_list)))
     if only == "caps":
         l3_by_stage = await handler._capability_selection(er, vs_list, stages_by_vs, catalogue)
 
