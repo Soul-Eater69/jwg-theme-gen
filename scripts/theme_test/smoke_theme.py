@@ -191,8 +191,10 @@ def _build_real_platform():
         PLATFORM_AUTH_TOKEN: str = ""  # bearer from `python -m scripts.print_token` (teg)
 
     cfg = _PlatformSettings()
+    # agenerate/generate append "api/v1/..." with no separator, so base_url must end with "/".
+    base_url = (cfg.CORE_PLATFORM_ENDPOINT.rstrip("/") + "/") if cfg.CORE_PLATFORM_ENDPOINT else ""
     return PlatformRestClient(
-        base_url=cfg.CORE_PLATFORM_ENDPOINT,
+        base_url=base_url,
         auth_token=cfg.PLATFORM_AUTH_TOKEN,
         verify_ssl=cfg.VERIFY_SSL,
         app_id=cfg.APP_ID,
