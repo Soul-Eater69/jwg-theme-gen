@@ -45,16 +45,10 @@ from jwg_app.domain.models.theme_generation import (
 from jwg_app.domain.services.theme import output_resolver as resolver
 from jwg_app.domain.services.theme import prompt_builder as prompts
 from jwg_app.domain.services.theme import worklet_mapper as mapper
+from jwg_app.domain.services.theme.config import ThemeGenerationConfig
 from jwg_app.domain.services.utils import load_config
 
 logger = logging.getLogger(__name__)
-
-# LLM retry: only transient gateway failures (rate limit / 5xx / timeout) are retried, with a small
-# bounded delay + jitter (not exponential), so a single blip across the 4+N calls does not fail
-# generation while staying within the API request time budget.
-_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
-_LLM_MAX_ATTEMPTS = 3
-_LLM_RETRY_DELAY_SECONDS = 1.0
 
 
 class ThemeGenerationHandler:
@@ -74,6 +68,8 @@ class ThemeGenerationHandler:
         azure_sql_client: ThemeCatalogueReader,
         platform_client: PlatformClient,
         user_config_path: str,
+        *,
+        theme_config: ThemeGenerationConfig | None = None,
     ) -> None:
         """
         Store the injected clients and load the theme-generation usecase config.
@@ -82,12 +78,14 @@ class ThemeGenerationHandler:
             azure_sql_client: Reads the catalogue for the approved value streams.
             platform_client: Sends the structured LLM calls.
             user_config_path: Path to user_config.yaml; loaded once here.
+            theme_config: Tuning config (LLM retry policy); defaults to ``ThemeGenerationConfig()``.
         """
         self._azure_sql = azure_sql_client
         self._platform = platform_client
         config = load_config(user_config_path)
         # the theme_generation usecase: { prompt: {key: {system_role, static_prompt}}, model_params }
         self._usecase = config["theme_generation"]
+        self._retry = (theme_config or ThemeGenerationConfig()).retry
 
     async def run(self, er_worklet: Worklet, vs_worklets: list[Worklet]) -> list[Worklet]:
         """
@@ -365,24 +363,27 @@ class ThemeGenerationHandler:
     ) -> tuple[Any, Any, int]:
         """Call the platform, retrying only transient gateway failures with a small bounded delay.
 
-        Transient statuses (rate limit / 5xx / timeout) are retried up to ``_LLM_MAX_ATTEMPTS``;
-        any other failure (e.g. 400/401) returns immediately so we do not retry what cannot succeed.
+        Transient statuses (rate limit / 5xx / timeout) are retried per ``self._retry``; any other
+        failure (e.g. 400/401) returns immediately so we do not retry what cannot succeed. When retry
+        is disabled, exactly one attempt is made.
         """
+        retry = self._retry
+        max_attempts = retry.attempts()
         data = error = status_code = None
-        for attempt in range(1, _LLM_MAX_ATTEMPTS + 1):
-            logger.debug("calling LLM for %s (attempt %d/%d)", key, attempt, _LLM_MAX_ATTEMPTS)
+        for attempt in range(1, max_attempts + 1):
+            logger.debug("calling LLM for %s (attempt %d/%d)", key, attempt, max_attempts)
             data, error, status_code = await self._platform.agenerate(
                 message=messages,
                 model_params=self._usecase.get("model_params"),
                 output_function=schema,
             )
             succeeded = not error and status_code == 200 and data is not None
-            if succeeded or status_code not in _RETRYABLE_STATUS or attempt == _LLM_MAX_ATTEMPTS:
+            if succeeded or status_code not in retry.retryable_status or attempt == max_attempts:
                 return data, error, status_code
-            delay = _LLM_RETRY_DELAY_SECONDS + random.uniform(0, 0.5)
+            delay = retry.delay_seconds * random.uniform(1.0, 1.5)  # bounded jitter, not exponential
             logger.warning(
                 "LLM call %s transient failure (status=%s); retry %d/%d in %.1fs",
-                key, status_code, attempt, _LLM_MAX_ATTEMPTS - 1, delay,
+                key, status_code, attempt, max_attempts - 1, delay,
             )
             await asyncio.sleep(delay)
         return data, error, status_code

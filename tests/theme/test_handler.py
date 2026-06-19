@@ -12,11 +12,13 @@ import pytest
 from jwg_app.domain.exceptions.custom_exception import CustomException
 from jwg_app.domain.models.theme_generation import (
     L3Capability,
+    TextOut,
     ValueStage,
     ValueStreamAttributes,
     ValueStreamCatalogue,
 )
 from jwg_app.domain.services.theme import worklet_mapper as mapper
+from jwg_app.domain.services.theme.config import RetryConfig, ThemeGenerationConfig
 from jwg_app.domain.services.theme_generation_handler import ThemeGenerationHandler
 
 CONFIG_PATH = str(Path(__file__).resolve().parents[2] / "configs" / "user_config.yaml")
@@ -148,17 +150,38 @@ def test_non_retryable_llm_failure_raises_503():
     assert exc.value.status_code == 503
 
 
-def test_transient_llm_failure_retries_then_503(monkeypatch):
-    import jwg_app.domain.services.theme_generation_handler as handler_module
+def _handler_with_retry(platform, retry):
+    return ThemeGenerationHandler(
+        _catalogue_with_stages("vs1"), platform, CONFIG_PATH,
+        theme_config=ThemeGenerationConfig(retry=retry),
+    )
 
-    monkeypatch.setattr(handler_module, "_LLM_RETRY_DELAY_SECONDS", 0)  # no sleep in tests
+
+def test_retry_enabled_retries_to_limit():
     platform = CountingPlatform(status=503)
-    handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), platform, CONFIG_PATH)
-    with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_vs("vs1")]))
-    assert exc.value.status_code == 503
-    # a transient (503) call is retried up to the limit before giving up
-    assert platform.calls >= handler_module._LLM_MAX_ATTEMPTS
+    handler = _handler_with_retry(platform, RetryConfig(max_attempts=3, delay_seconds=0))
+    _, _, status = asyncio.run(
+        handler._agenerate_with_retry("k", [{"role": "user", "content": "x"}], TextOut)
+    )
+    assert status == 503
+    assert platform.calls == 3  # retried up to max_attempts
+
+
+def test_retry_disabled_makes_single_attempt():
+    platform = CountingPlatform(status=503)
+    handler = _handler_with_retry(platform, RetryConfig(enabled=False))
+    _, _, status = asyncio.run(
+        handler._agenerate_with_retry("k", [{"role": "user", "content": "x"}], TextOut)
+    )
+    assert status == 503
+    assert platform.calls == 1  # flag off -> no retry
+
+
+def test_non_retryable_status_is_not_retried():
+    platform = CountingPlatform(status=400)
+    handler = _handler_with_retry(platform, RetryConfig(max_attempts=3, delay_seconds=0))
+    asyncio.run(handler._agenerate_with_retry("k", [{"role": "user", "content": "x"}], TextOut))
+    assert platform.calls == 1  # 400 is not retryable
 
 
 # ---- happy path (multiple value streams) ----------------------------------------------
