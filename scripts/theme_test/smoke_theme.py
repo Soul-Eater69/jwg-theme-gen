@@ -187,7 +187,7 @@ def _build_real_platform():
 
         CORE_PLATFORM_ENDPOINT: str = ""
         VERIFY_SSL: bool = False
-        APP_ID: str = ""
+        APP_ID: str = "APP00236755"  # same default as the prod Settings
         PLATFORM_AUTH_TOKEN: str = ""  # bearer from `python -m scripts.print_token` (teg)
 
     cfg = _PlatformSettings()
@@ -195,7 +195,7 @@ def _build_real_platform():
         base_url=cfg.CORE_PLATFORM_ENDPOINT,
         auth_token=cfg.PLATFORM_AUTH_TOKEN,
         verify_ssl=cfg.VERIFY_SSL,
-        app_id=cfg.APP_ID or None,
+        app_id=cfg.APP_ID,
     )
 
 
