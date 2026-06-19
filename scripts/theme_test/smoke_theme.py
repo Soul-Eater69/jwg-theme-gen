@@ -27,6 +27,7 @@ for _p in (HERE, ROOT):
 
 import argparse  # noqa: E402
 import asyncio  # noqa: E402
+import logging  # noqa: E402
 from typing import Any, Dict, List, Optional, Sequence, Tuple  # noqa: E402
 
 from worklet_data_api import Worklet  # noqa: E402  (stub)
@@ -98,6 +99,34 @@ class FakeCatalogueReader:
                 ],
             )
         return out
+
+
+class _DebugPlatform:
+    """Wraps any platform client and prints each agenerate request + raw (data, error, status)."""
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+
+    async def agenerate(
+        self,
+        message: List[Dict[str, str]],
+        model_params: Optional[Dict[str, Any]] = None,
+        output_function: Optional[type] = None,
+        **kwargs: Any,
+    ) -> Tuple[Optional[Any], Optional[str], int]:
+        schema = output_function.__name__ if output_function else "?"
+        user = message[-1]["content"] if message else ""
+        print(f"\n>>> agenerate [{schema}] | model_params={model_params}")
+        print(f">>> user message ({len(user)} chars), first 400:\n{user[:400]}")
+        data, error, status = await self._inner.agenerate(
+            message=message, model_params=model_params, output_function=output_function, **kwargs
+        )
+        print(f"<<< status={status} error={error!r}")
+        print(f"<<< data (first 600): {str(data)[:600]!r}")
+        return data, error, status
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
 
 
 class FakePlatformClient:
@@ -221,12 +250,20 @@ def _build_real_service(session):
 
 
 async def main(args: argparse.Namespace) -> None:
+    if args.debug:
+        logging.basicConfig(
+            level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+        )
+
     if args.real_llm:
         platform = _build_real_platform()
         print("# using REAL platform client (PlatformRestClient, config from .env)")
     else:
         platform = FakePlatformClient()
         print("# using FAKE platform client (no LLM)")
+
+    if args.debug:
+        platform = _DebugPlatform(platform)
 
     er, vs = build_er_worklet(), build_vs_worklet()
     try:
@@ -258,5 +295,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--real-llm", action="store_true", help="use prod PlatformRestClient (needs PLATFORM_* env)")
     parser.add_argument("--real-db", action="store_true", help="use real ThemeService over Azure SQL (needs env + aioodbc)")
+    parser.add_argument("--debug", action="store_true", help="DEBUG logging + print each agenerate request/response")
     main_args = parser.parse_args()
     asyncio.run(main(main_args))
