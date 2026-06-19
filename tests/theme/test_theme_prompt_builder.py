@@ -38,11 +38,12 @@ def test_stage_value_streams_renders_header_attrs_and_stages():
 
 
 def test_capability_value_streams_renders_stage_and_l3():
-    stage = SelectedStage(stage_id="st1", stage_name="Stage One")
+    stage = SelectedStage(stage_id="st1", stage_name="Stage One", stage_description="stage desc")
     l3 = [L3Capability(id="c1", name="Cap One", description="cd", stage_id="st1", level_two_id="L2", level_two_name="L2 Name")]
     out = pb.capability_value_streams([(_vs(), [(stage, l3)])])
     assert "## Value Stream vs1" in out
     assert "### Stage st1: Stage One" in out
+    assert "Description: stage desc" in out  # stage description in the caps header
     assert "[c1] Cap One" in out
     assert "(L2: L2 Name)" in out
 
@@ -52,6 +53,7 @@ def test_framing_value_streams_lists_each_vs():
     assert "valueStreamId: vs1" in out
     assert "valueStreamId: vs2" in out
     assert "valueStreamName: One" in out
+    assert "trigger: trig" in out  # trigger is now included in the framing block
 
 
 def test_framing_value_streams_omits_unset_optional_fields():
@@ -61,6 +63,16 @@ def test_framing_value_streams_omits_unset_optional_fields():
     assert "valueProposition" not in out
 
 
-def test_selected_stages_block():
+def test_selected_stages_block_includes_scope():
+    stage = SelectedStage(
+        stage_id="st1", stage_name="S1", stage_description="sd", entrance_criteria="en", exit_criteria="ex"
+    )
+    out = pb.selected_stages([stage])
+    assert "[st1] S1" in out
+    assert "Description: sd" in out
+    assert "Entrance: en | Exit: ex" in out
+
+
+def test_selected_stages_block_omits_empty_scope():
     out = pb.selected_stages([SelectedStage(stage_id="st1", stage_name="S1")])
-    assert out == "[st1] S1"
+    assert out == "[st1] S1"  # no scope lines when description/criteria are empty

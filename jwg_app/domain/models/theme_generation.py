@@ -91,11 +91,15 @@ class ValueStreamCatalogue(BaseModel):
 
 
 class SelectedStage(CamelModel):
-    """A stage the work runs through. Names are canonical from the catalogue; the model echoes the
-    name as a selection anchor and we overwrite it on resolve."""
+    """A stage the work runs through. Name and scope (description, entrance/exit) are canonical from
+    the catalogue: the model echoes the name as a selection anchor and we overwrite it - and fill the
+    scope - on resolve, so downstream prompts (business needs, capabilities) see the full stage."""
 
     stage_id: str
     stage_name: str = ""
+    stage_description: str = ""
+    entrance_criteria: str = ""
+    exit_criteria: str = ""
     reason: str = ""
 
 

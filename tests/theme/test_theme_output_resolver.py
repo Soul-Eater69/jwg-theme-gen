@@ -14,7 +14,13 @@ from jwg_app.domain.services.theme import output_resolver as resolver
 
 
 def _stage(stage_id: str, name: str = "S") -> ValueStage:
-    return ValueStage(stage_id=stage_id, stage_name=name)
+    return ValueStage(
+        stage_id=stage_id,
+        stage_name=name,
+        stage_description=f"{name} desc",
+        entrance_criteria=f"{name} in",
+        exit_criteria=f"{name} out",
+    )
 
 
 def _l3(cap_id: str, stage: str = "s1", l2_id: str = "L2", l2_name: str = "N") -> L3Capability:
@@ -37,6 +43,10 @@ def test_resolve_stages_keeps_valid_picks_with_canonical_name():
     assert [s.stage_id for s in out["vs1"]] == ["st1"]
     assert out["vs1"][0].stage_name == "Alpha"  # canonical catalogue name, not the model's echo
     assert out["vs1"][0].reason == "r"
+    # scope is carried from the catalogue so downstream prompts see the full stage
+    assert out["vs1"][0].stage_description == "Alpha desc"
+    assert out["vs1"][0].entrance_criteria == "Alpha in"
+    assert out["vs1"][0].exit_criteria == "Alpha out"
 
 
 def test_resolve_stages_empty_falls_back_to_all():

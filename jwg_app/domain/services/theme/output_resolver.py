@@ -52,9 +52,7 @@ def resolve_stages(
         picks_by_vs,
         stage_lists,
         id_of=lambda s: s.stage_id,
-        make=lambda vs_id, stage_id: SelectedStage(
-            stage_id=stage_id, stage_name=_name_in(stage_lists[vs_id], stage_id)
-        ),
+        make=lambda vs_id, stage_id: _to_selected(_stage_in(stage_lists[vs_id], stage_id)),
     )
     return resolved
 
@@ -126,7 +124,7 @@ def _keep_known_stages(
         if stage_id in seen:
             continue
         seen.add(stage_id)
-        out.append(SelectedStage(stage_id=stage_id, stage_name=by_id[stage_id].stage_name, reason=reason))
+        out.append(_to_selected(by_id[stage_id], reason))
     return out
 
 
@@ -174,9 +172,21 @@ def _mark_selected(cap: L3Capability) -> L3Capability:
     return cap.model_copy(update={"llm_selected": True, "selected": True})
 
 
-def _name_in(stages: Sequence[ValueStage], stage_id: str) -> str:
-    """Return the catalogue name of the stage with ``stage_id``."""
-    return next(s.stage_name for s in stages if s.stage_id == stage_id)
+def _to_selected(stage: ValueStage, reason: str = "") -> SelectedStage:
+    """Build a SelectedStage from a catalogue stage, carrying its name and full scope."""
+    return SelectedStage(
+        stage_id=stage.stage_id,
+        stage_name=stage.stage_name,
+        stage_description=stage.stage_description,
+        entrance_criteria=stage.entrance_criteria,
+        exit_criteria=stage.exit_criteria,
+        reason=reason,
+    )
+
+
+def _stage_in(stages: Sequence[ValueStage], stage_id: str) -> ValueStage:
+    """Return the catalogue stage with ``stage_id``."""
+    return next(s for s in stages if s.stage_id == stage_id)
 
 
 def _cap_in(candidates: Sequence[L3Capability], cap_id: str) -> L3Capability:

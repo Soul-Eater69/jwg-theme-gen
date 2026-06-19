@@ -191,8 +191,8 @@ theme_generation:
         paragraph of its Theme Description: how this idea's initiative shows up through THAT value
         stream's work - the slice of the idea that value stream delivers.
 
-        Use ONLY the provided ticket context and each value stream's name, description, and value
-        proposition to frame it.
+        Use ONLY the provided ticket context and each value stream's name, description, value
+        proposition, and trigger to frame it.
         One concrete paragraph per value stream: the business context, the initiative/product it
         serves, the stakeholders it touches, and the outcome - through that value stream's lens.
 

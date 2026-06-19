@@ -89,13 +89,18 @@ def framing_value_streams(vs_list: Sequence[VSContext]) -> str:
             lines.append(f"  valueStreamDescription: {vs.vs_description}")
         if vs.value_proposition:
             lines.append(f"  valueProposition: {vs.value_proposition}")
+        if vs.trigger:
+            lines.append(f"  trigger: {vs.trigger}")
         blocks.append("\n".join(lines))
     return "\n".join(blocks)
 
 
 def selected_stages(stages: Sequence[SelectedStage]) -> str:
     """
-    Build the selected-stages block for business needs.
+    Build the selected-stages block for business needs, with each stage's scope.
+
+    Business needs are written per stage within the stage's entrance->exit scope, so each stage is
+    rendered with its description and criteria (not just the name).
 
     Args:
         stages: The stages chosen for one value stream.
@@ -103,7 +108,14 @@ def selected_stages(stages: Sequence[SelectedStage]) -> str:
     Returns:
         The selected-stages block as prompt-ready text.
     """
-    return "\n".join(f"[{s.stage_id}] {s.stage_name}" for s in stages)
+    lines: list[str] = []
+    for s in stages:
+        lines.append(f"[{s.stage_id}] {s.stage_name}")
+        if s.stage_description:
+            lines.append(f"  Description: {s.stage_description}")
+        if s.entrance_criteria or s.exit_criteria:
+            lines.append(f"  Entrance: {s.entrance_criteria} | Exit: {s.exit_criteria}")
+    return "\n".join(lines)
 
 
 def _vs_stage_block(vs: VSContext, stages: Sequence[ValueStage]) -> str:
@@ -118,11 +130,11 @@ def _vs_l3_block(
     """Render one value stream, its selected stages, and each stage's candidate L3 capabilities."""
     blocks = ["\n".join(_vs_header(vs))]
     for stage, caps in stage_caps:
-        lines = [
-            f"### Stage {stage.stage_id}: {stage.stage_name}",
-            "Candidate L3 capabilities (choose by id; each shows its parent L2):",
-            *(_l3_line(c) for c in caps),
-        ]
+        lines = [f"### Stage {stage.stage_id}: {stage.stage_name}"]
+        if stage.stage_description:
+            lines.append(f"Description: {stage.stage_description}")
+        lines.append("Candidate L3 capabilities (choose by id; each shows its parent L2):")
+        lines += [_l3_line(c) for c in caps]
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
 
