@@ -99,6 +99,20 @@ class CountingPlatform:
         return None, "transient", self.status
 
 
+class SchemaFailingPlatform:
+    """Fails (503) only the call whose output schema name matches; all other calls succeed."""
+
+    def __init__(self, failing_schema):
+        self.failing_schema = failing_schema
+        self._ok = FakePlatform()
+
+    async def agenerate(self, message, model_params=None, output_function=None, **kwargs):
+        name = output_function.__name__ if output_function else ""
+        if name == self.failing_schema:
+            return None, "core call down", 503
+        return await self._ok.agenerate(message, model_params, output_function, **kwargs)
+
+
 class BusinessNeedsFailingPlatform:
     """Core calls succeed; business needs (the per-VS TextOut for ``failing_vs``) returns 503."""
 
@@ -161,6 +175,22 @@ def test_no_stages_resolved_raises_400():
 
 def test_non_retryable_llm_failure_raises_503():
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), FailingPlatform(), CONFIG_PATH)
+    with pytest.raises(CustomException) as exc:
+        asyncio.run(handler.run(_er(), [_vs("vs1")]))
+    assert exc.value.status_code == 503
+
+
+@pytest.mark.parametrize(
+    "schema", ["TextOut", "FramingsOut", "BatchedStageSelection", "BatchedCapabilitySelection"]
+)
+def test_any_core_call_failure_raises_503(schema):
+    # description body / framing / stage selection / capabilities are core: a failure raises and
+    # aborts the whole request (not a per-VS flag). (TextOut here is the body call, which runs first.)
+    platform = SchemaFailingPlatform(failing_schema=schema)
+    handler = ThemeGenerationHandler(
+        _catalogue_with_stages("vs1"), platform, CONFIG_PATH,
+        theme_config=ThemeGenerationConfig(retry=RetryConfig(enabled=False)),
+    )
     with pytest.raises(CustomException) as exc:
         asyncio.run(handler.run(_er(), [_vs("vs1")]))
     assert exc.value.status_code == 503

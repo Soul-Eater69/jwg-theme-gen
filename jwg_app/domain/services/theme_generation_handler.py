@@ -134,12 +134,19 @@ class ThemeGenerationHandler:
         )
 
         # --- Core phase: batched, all-VS calls. Any failure here aborts the whole request. ---
-        # Step 1 — ticket-level batched calls, in parallel.
-        body, framings, stages_by_vs = await asyncio.gather(
+        # Step 1 — ticket-level batched calls, in parallel. return_exceptions=True lets all three
+        # finish (no orphaned "never retrieved" tasks); we then re-raise the first core failure.
+        results = await asyncio.gather(
             self._description_body(er),
             self._description_framings(er, vs_list),
             self._stage_selection(er, vs_list, catalogue),
+            return_exceptions=True,
         )
+        for result in results:
+            if isinstance(result, BaseException):
+                raise result  # a core call failed (CustomException 503) -> abort the request
+        body, framings, stages_by_vs = results
+
         if not any(stages_by_vs.get(vs.vs_id) for vs in vs_list):
             raise CustomException(
                 status_code=400, detail="No valid stages resolved for this Value Stream"
