@@ -219,72 +219,94 @@ theme_generation:
         Value Stages of an approved value stream. Business Needs are detailed, stage-specific, and
         written in the style of Jira Theme Business Needs.
 
-        Use ONLY the provided content, value stream, and stages as facts.
+        SOURCE HIERARCHY:
+        - The Ticket context is the ONLY source of factual business needs.
+        - The approved value stream and selected stages are used only to organize, scope, and place
+          ticket-supported needs.
+        - Do NOT create a business need, note, dependency, business rule, assumption, training item,
+          or reporting item solely from the value stream name, value stream description, value
+          proposition, stage name, stage description, entrance criteria, or exit criteria.
+        - Stage descriptions and entrance/exit criteria may help decide which selected stage a
+          ticket-supported need belongs under, but they are not requirement evidence by themselves.
 
         GROUNDING:
-        Every business need, note, dependency, business rule, assumption, validation item, training
-        item, and reporting item must be directly supported by a specific phrase in the content. If
-        the content does not support it, do not write it. Never infer standard process, training,
-        reporting, dependencies, rules, or assumptions just because they seem likely.
+        Every numbered need, note, dependency, business rule, assumption, validation item, training
+        item, and reporting item must be directly supported by a specific phrase in the Ticket
+        context. If the support only comes from the value stream or selected stage text, omit it.
+        Never infer standard process, training, reporting, dependencies, rules, or assumptions just
+        because they seem likely.
 
-        CAPTURE WHAT THE CONTENT SUPPORTS:
-        For each selected stage, write every grounded need the content implies for that stage's work.
-        Make each need concrete enough that it clearly belongs to that stage: name the real process,
-        system, population, product, vendor, team, document, report, or stakeholder when the content
-        names one. Do not omit a supported need, but do not pad with generic requirements.
+        EVIDENCE TEST:
+        Before writing any item, ask: "What exact phrase in the Ticket context supports this?"
+        If there is no clear ticket phrase, do not write the item.
 
-        Return ONE consolidated text block (field "text"). Repeat the structure per selected stage.
-        Use this hierarchy, adapting optional headings to the content when a more specific grounded
-        functional area is named:
+        CAPTURE WHAT THE TICKET SUPPORTS:
+        For each selected stage, write every grounded need the Ticket context implies for that
+        stage's work. Make each need concrete enough that it clearly belongs to that stage: name the
+        real process, system, population, product, vendor, team, document, report, stakeholder, date,
+        or owner when the Ticket context names one. Do not omit supported needs, but do not pad with
+        generic workflow requirements.
+
+        Return ONE consolidated text block in field "text". Repeat the structure per selected stage
+        that has ticket-supported content. If a selected stage has no ticket-supported needs, omit
+        that stage entirely.
+
+        Use this hierarchy, adapting optional headings to the Ticket context when a more specific
+        grounded functional area is named:
 
         Value Stage: <stage name>
 
         Business Product Feature: <feature, scope area, workflow, system, report/dashboard, client
         segment, department, or "Overall Scope">
 
-        <Optional functional heading if supported, such as Member Customer Service, Foundational:
-        Operational Training - Feature Specific, Product Definition & Account Setup, Claims
-        Operations, Clinical Operations, Reporting, Finance, etc.>
+        <Optional functional heading if supported by the Ticket context, such as Member Customer
+        Service, Foundational: Operational Training - Feature Specific, Product Definition & Account
+        Setup, Claims Operations, Clinical Operations, Reporting, Finance, etc.>
 
-        1. <concrete business need supported by the content>
-           Note: <only if the content explicitly gives clarification, exception, or detail>
-           Dependency: <only if the content explicitly names a system, vendor, team, upstream or
+        1. <concrete business need supported by the Ticket context>
+           Note: <only if the Ticket context explicitly gives clarification, exception, or detail>
+           Dependency: <only if the Ticket context explicitly names a system, vendor, team, upstream or
              downstream dependency, document, data feed, related work, or owner>
-           Business Rule: <only if the content explicitly states a policy, eligibility, routing,
+           Business Rule: <only if the Ticket context explicitly states a policy, eligibility, routing,
              configuration, pairing, exclusion, processing, or operational rule>
-           Assumption: <only if the content explicitly labels or states an assumption, validation
-             caveat, target-to-validate item, no-impact assumption, owner/date validation note, or
-             unresolved condition>
+           Assumption: <only if the Ticket context explicitly labels or states an assumption,
+             validation caveat, target-to-validate item, no-impact assumption, owner/date validation
+             note, or unresolved condition>
 
         Operational Training:
-        1. <training/readiness need supported by the content>
+        1. <training/readiness need supported by the Ticket context>
 
         Operational Reporting - <report/dashboard/operation name if stated>:
-        1. <reporting, dashboard, tracking, monitoring, metrics, data, or operational visibility need>
+        1. <reporting, dashboard, tracking, monitoring, metrics, data, or operational visibility need
+           supported by the Ticket context>
 
         SECTION GUIDANCE:
-        - Always group by Value Stage.
-        - Under each stage, include one or more Business Product Feature sections when the content
-          supports distinct scope areas. Use "Overall Scope" only when the work is not naturally split.
-        - Use specific functional headings when the content names a department, operational area,
-          stakeholder group, system area, or service function. Do not force every need directly under
-          Business Product Feature if a more specific grounded heading is useful.
-        - Operational Training is a positive extraction target. Use it when the content mentions
-          training, readiness, job aids, implementation guides, templates, knowledge articles,
-          enablement, user preparation, operational guides, or teams needing to be trained.
-        - Operational Reporting is a positive extraction target. Use it when the content mentions
-          reports, dashboards, metrics, tracking, monitoring, data feeds, identifying or filtering
-          members, operational visibility, audit, analytics, or reporting updates.
-        - Assumptions are allowed when grounded. Include them as "Assumption:" lines under the
-          relevant need or as numbered bullets under the relevant feature or functional heading.
-          Do not create unsupported assumptions.
-        - If the source says "no impact", "target to validate", "validation owner", "assumption",
-          or similar, preserve that as an Assumption or Note when it belongs to the selected stage.
-        - Omit any section with no grounded content. Do not write "N/A", "None", "TBD", or explain
-          that the section is absent.
+        - Always group by Value Stage when there is ticket-supported content for that stage.
+        - Under each included stage, include one or more Business Product Feature sections when the
+          Ticket context supports distinct scope areas. Use "Overall Scope" only when the supported
+          work is not naturally split.
+        - Use specific functional headings when the Ticket context names a department, operational
+          area, stakeholder group, system area, or service function.
+        - Operational Training is a positive extraction target, but only from the Ticket context. Use
+          it when the Ticket context mentions training, readiness, job aids, implementation guides,
+          templates, knowledge articles, enablement, user preparation, operational guides, or teams
+          needing to be trained.
+        - Operational Reporting is a positive extraction target, but only from the Ticket context. Use
+          it when the Ticket context mentions reports, dashboards, metrics, tracking, monitoring, data
+          feeds, identifying or filtering members, operational visibility, audit, analytics, or
+          reporting updates.
+        - Assumptions are allowed when grounded in the Ticket context. Include them as "Assumption:"
+          lines under the relevant need or as numbered bullets under the relevant feature or
+          functional heading.
+        - If the Ticket context says "no impact", "target to validate", "validation owner",
+          "assumption", or similar, preserve that as an Assumption or Note when it belongs to the
+          selected stage.
+        - Omit any section with no Ticket-context support. Do not write "N/A", "None", "TBD", or
+          explain that the section is absent.
         - Do not copy ticket/group/epic ids such as IDMT-, GROUP-, or EPIC- into the text unless the
           id is part of a named dependency that must be preserved for traceability.
-        - Cover only the selected stages, and only work within each stage's entrance-to-exit scope.
+        - Cover only selected stages, and only when the Ticket context contains work that belongs
+          within that stage's entrance-to-exit scope.
       static_prompt: |
         ## Approved value stream
         ID: {value_stream_id}
