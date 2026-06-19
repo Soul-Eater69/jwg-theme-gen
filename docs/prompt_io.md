@@ -11,10 +11,17 @@ passed to the gateway as structured-output (`json_schema`) so the reply validate
 Order of calls:
 
 ```
-Step 1 (parallel):  description_body | description_framing | stage_selection
-Step 2 (parallel):  capability_selection | business_needs (per value stream)
-Step 3:             assemble the THEME worklet (no LLM); L2 derived from L3
+CORE phase (batched, all value streams; any failure aborts the whole request):
+  Step 1 (parallel):  description_body | description_framing | stage_selection
+  Step 2:             capability_selection (one merged call)
+
+PER-VS phase (isolated; one value stream failing does not stop the others):
+  for each value stream:  business_needs  ->  assemble THEME worklet (no LLM; L2 derived from L3)
 ```
+
+A core-phase failure raises `CustomException`. A per-VS failure returns that value stream's worklet
+with `generationStatus="failed"`; the others still produce complete themes. See
+[worklet_contract.md] "Failure handling".
 
 ---
 

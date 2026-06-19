@@ -99,6 +99,22 @@ class CountingPlatform:
         return None, "transient", self.status
 
 
+class BusinessNeedsFailingPlatform:
+    """Core calls succeed; business needs (the per-VS TextOut for ``failing_vs``) returns 503."""
+
+    def __init__(self, failing_vs):
+        self.failing_vs = failing_vs
+        self._ok = FakePlatform()
+
+    async def agenerate(self, message, model_params=None, output_function=None, **kwargs):
+        name = output_function.__name__ if output_function else ""
+        user = message[-1]["content"] if message else ""
+        # business needs is a TextOut whose rendered prompt carries the value-stream id (body does not).
+        if name == "TextOut" and self.failing_vs in user:
+            return None, "needs gateway down", 503
+        return await self._ok.agenerate(message, model_params, output_function, **kwargs)
+
+
 def _catalogue_with_stages(*vs_ids):
     data = {}
     for vid in vs_ids:
@@ -186,14 +202,33 @@ def test_non_retryable_status_is_not_retried():
 
 # ---- happy path (multiple value streams) ----------------------------------------------
 
-def test_produces_one_theme_per_value_stream():
+def test_produces_one_complete_theme_per_value_stream():
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1", "vs2"), FakePlatform(), CONFIG_PATH)
     themes = asyncio.run(handler.run(_er(), [_vs("vs1"), _vs("vs2")]))
 
     assert len(themes) == 2
+    assert not any(mapper.is_failed_theme(t) for t in themes)
     titles = [mapper.get_property(t, mapper.ThemeProps.TITLE, "") for t in themes]
     assert all("Ticket Title" in t for t in titles)
-    # each theme carries its selected stages (stage selection fell back to all catalogue stages)
     for theme in themes:
+        assert mapper.get_property(theme, mapper.ThemeProps.GENERATION_STATUS) == "complete"
         stages = mapper.get_property(theme, mapper.ThemeProps.SELECTED_STAGES, [])
         assert len(stages) == 1
+
+
+# ---- per-VS isolation -----------------------------------------------------------------
+
+def test_per_vs_business_needs_failure_is_flagged_not_raised():
+    platform = BusinessNeedsFailingPlatform(failing_vs="vs1")
+    handler = ThemeGenerationHandler(
+        _catalogue_with_stages("vs1", "vs2"), platform, CONFIG_PATH,
+        theme_config=ThemeGenerationConfig(retry=RetryConfig(enabled=False)),
+    )
+    themes = asyncio.run(handler.run(_er(), [_vs("vs1"), _vs("vs2")]))
+
+    assert len(themes) == 2  # both returned; vs1 failed, vs2 complete
+    by_status = {mapper.get_property(t, mapper.ThemeProps.GENERATION_STATUS): t for t in themes}
+    assert set(by_status) == {"failed", "complete"}
+    failed = by_status["failed"]
+    assert mapper.is_failed_theme(failed)
+    assert "503" in mapper.get_property(failed, mapper.ThemeProps.GENERATION_ERROR, "")

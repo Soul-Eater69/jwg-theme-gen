@@ -59,9 +59,8 @@ and `vs_description` are contractually provided on the worklet. Everything else 
 
 - `description_body` is VS-agnostic on purpose: it is generated once for the ticket and reused across
   every VS theme; the per-VS framing paragraph (which does get VS fields) is prepended to it.
-- `trigger` is included only where lifecycle/process reasoning matters (stage and capability
-  selection); it is omitted from framing and business needs as marginal there. This is a soft tuning
-  choice, not a hard rule.
+- `trigger` is included in framing, stage selection, and capability selection; it is omitted only
+  from business needs. This is a soft tuning choice, not a hard rule.
 
 ---
 
@@ -90,6 +89,35 @@ Built by `to_theme_worklet`, one per approved value stream. Returned unsaved; th
 | `selectedStages` | list of selected stages (`SelectedStage.model_dump()`) |
 | `L3 Business Capability` | selected L3 capabilities (`L3Capability.model_dump()`) |
 | `L2 Business Capability` | derived L2 capabilities (`L2Capability.model_dump()`) |
+| `generationStatus` | `"complete"` |
+
+A **failed** value stream (see partial failure below) returns a THEME worklet with only:
+
+| Property name | Content |
+| --- | --- |
+| `generationStatus` | `"failed"` |
+| `generationError` | `"<status>: <detail>"` (e.g. `"503: LLM service unavailable: ..."`) |
+| `generatedByLLM` | `True` |
+
+---
+
+## Failure handling
+
+`run()` returns `list[Worklet]`; the API reads `generationStatus` per worklet. Failures fall in two
+tiers:
+
+- **Core failure → the whole request raises** `CustomException` (no list returned). Core =
+  catalogue read + the batched, all-value-stream LLM calls (description body, description framing,
+  stage selection, capabilities). These are shared/foundational, so if any fails after retries the
+  request fails: `404` (missing worklets), `400` (no stages resolve), `503` (Azure SQL or a core LLM
+  call unavailable).
+- **Per-VS failure → that value stream is flagged, others still succeed.** After the core phase,
+  each value stream's own flow (business needs + assembly) runs in isolation. If one fails after
+  retries, its worklet comes back with `generationStatus="failed"` + `generationError`, and the
+  remaining value streams return complete themes. The request does **not** raise.
+
+Transient LLM failures (429 / 5xx / timeout) are retried per the theme retry config before either
+tier treats the call as failed.
 
 ---
 
