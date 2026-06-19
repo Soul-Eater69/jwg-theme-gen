@@ -79,8 +79,22 @@ class FakePlatform:
 
 
 class FailingPlatform:
+    """Non-retryable failure (400) -> fails fast."""
+
     async def agenerate(self, message, model_params=None, output_function=None, **kwargs):
-        return None, "gateway exploded", 500
+        return None, "bad request", 400
+
+
+class CountingPlatform:
+    """Always returns a transient status; counts how many agenerate calls were made."""
+
+    def __init__(self, status=503):
+        self.calls = 0
+        self.status = status
+
+    async def agenerate(self, message, model_params=None, output_function=None, **kwargs):
+        self.calls += 1
+        return None, "transient", self.status
 
 
 def _catalogue_with_stages(*vs_ids):
@@ -127,11 +141,24 @@ def test_no_stages_resolved_raises_400():
     assert exc.value.status_code == 400
 
 
-def test_llm_failure_raises_503():
+def test_non_retryable_llm_failure_raises_503():
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), FailingPlatform(), CONFIG_PATH)
     with pytest.raises(CustomException) as exc:
         asyncio.run(handler.run(_er(), [_vs("vs1")]))
     assert exc.value.status_code == 503
+
+
+def test_transient_llm_failure_retries_then_503(monkeypatch):
+    import jwg_app.domain.services.theme_generation_handler as handler_module
+
+    monkeypatch.setattr(handler_module, "_LLM_RETRY_DELAY_SECONDS", 0)  # no sleep in tests
+    platform = CountingPlatform(status=503)
+    handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), platform, CONFIG_PATH)
+    with pytest.raises(CustomException) as exc:
+        asyncio.run(handler.run(_er(), [_vs("vs1")]))
+    assert exc.value.status_code == 503
+    # a transient (503) call is retried up to the limit before giving up
+    assert platform.calls >= handler_module._LLM_MAX_ATTEMPTS
 
 
 # ---- happy path (multiple value streams) ----------------------------------------------

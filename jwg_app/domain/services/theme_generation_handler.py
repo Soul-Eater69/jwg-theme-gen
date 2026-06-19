@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 from typing import Any
 
 from pydantic import BaseModel
@@ -47,6 +48,13 @@ from jwg_app.domain.services.theme import worklet_mapper as mapper
 from jwg_app.domain.services.utils import load_config
 
 logger = logging.getLogger(__name__)
+
+# LLM retry: only transient gateway failures (rate limit / 5xx / timeout) are retried, with a small
+# bounded delay + jitter (not exponential), so a single blip across the 4+N calls does not fail
+# generation while staying within the API request time budget.
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+_LLM_MAX_ATTEMPTS = 3
+_LLM_RETRY_DELAY_SECONDS = 1.0
 
 
 class ThemeGenerationHandler:
@@ -333,19 +341,15 @@ class ThemeGenerationHandler:
             The validated ``schema`` instance.
 
         Raises:
-            CustomException: 503 if the LLM gateway returns an error, a non-200 status, or no data.
+            CustomException: 503 if the LLM gateway still fails after retries, returns a non-200
+                status, or returns no data.
         """
         prompt = self._usecase["prompt"][key]
         messages = [
             {"role": "system", "content": prompt["system_role"]},
             {"role": "user", "content": prompt["static_prompt"].format(**values)},
         ]
-        logger.debug("calling LLM for %s", key)
-        data, error, status_code = await self._platform.agenerate(
-            message=messages,
-            model_params=self._usecase.get("model_params"),
-            output_function=schema,
-        )
+        data, error, status_code = await self._agenerate_with_retry(key, messages, schema)
         if error or status_code != 200 or data is None:
             reason = error or "no data returned"
             logger.error("LLM call %s failed (status=%s): %s", key, status_code, reason)
@@ -355,4 +359,31 @@ class ThemeGenerationHandler:
         if isinstance(data, str):  # structured output returned as a JSON string
             data = json.loads(data)
         return schema.model_validate(data)
+
+    async def _agenerate_with_retry(
+        self, key: str, messages: list[dict[str, str]], schema: type[BaseModel]
+    ) -> tuple[Any, Any, int]:
+        """Call the platform, retrying only transient gateway failures with a small bounded delay.
+
+        Transient statuses (rate limit / 5xx / timeout) are retried up to ``_LLM_MAX_ATTEMPTS``;
+        any other failure (e.g. 400/401) returns immediately so we do not retry what cannot succeed.
+        """
+        data = error = status_code = None
+        for attempt in range(1, _LLM_MAX_ATTEMPTS + 1):
+            logger.debug("calling LLM for %s (attempt %d/%d)", key, attempt, _LLM_MAX_ATTEMPTS)
+            data, error, status_code = await self._platform.agenerate(
+                message=messages,
+                model_params=self._usecase.get("model_params"),
+                output_function=schema,
+            )
+            succeeded = not error and status_code == 200 and data is not None
+            if succeeded or status_code not in _RETRYABLE_STATUS or attempt == _LLM_MAX_ATTEMPTS:
+                return data, error, status_code
+            delay = _LLM_RETRY_DELAY_SECONDS + random.uniform(0, 0.5)
+            logger.warning(
+                "LLM call %s transient failure (status=%s); retry %d/%d in %.1fs",
+                key, status_code, attempt, _LLM_MAX_ATTEMPTS - 1, delay,
+            )
+            await asyncio.sleep(delay)
+        return data, error, status_code
 
