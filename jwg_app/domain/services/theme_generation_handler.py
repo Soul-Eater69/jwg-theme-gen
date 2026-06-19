@@ -103,10 +103,10 @@ class ThemeGenerationHandler:
 
         Raises:
             CustomException: A core failure that aborts the whole request - 404 if the ER or VS
-                worklets are missing; 400 if no stages resolve for any value stream; 503 if Azure SQL
-                or a core LLM call (description body/framing, stage selection, capabilities) is
-                unavailable after retries. Per-VS (business needs) failures do NOT raise; they are
-                returned as failed worklets.
+                worklets are missing; 503 if Azure SQL or a core LLM call (description body/framing,
+                stage selection, capabilities) is unavailable after retries. Per-VS failures do NOT
+                raise; they are returned as failed worklets (e.g. 503 if business needs is
+                unavailable, 400 if the value stream has no governed stages).
         """
         if er_worklet is None or not vs_worklets:
             raise CustomException(
@@ -147,10 +147,6 @@ class ThemeGenerationHandler:
                 raise result  # a core call failed (CustomException 503) -> abort the request
         body, framings, stages_by_vs = results
 
-        if not any(stages_by_vs.get(vs.vs_id) for vs in vs_list):
-            raise CustomException(
-                status_code=400, detail="No valid stages resolved for this Value Stream"
-            )
         # Step 2 — capabilities (one merged call across all value streams).
         l3_by_stage = await self._capability_selection(er, vs_list, stages_by_vs, catalogue)
 
@@ -185,6 +181,12 @@ class ThemeGenerationHandler:
         """
         stages = stages_by_vs.get(vs.vs_id, [])
         try:
+            if not stages:
+                # No governed stages for this value stream (none in the catalogue) -> no theme to
+                # build. Flagged as a per-VS failure so the others still succeed.
+                raise CustomException(
+                    status_code=400, detail="No valid stages resolved for this Value Stream"
+                )
             business_needs = await self._business_needs_for_vs(er, vs, stages)
             l3 = [cap for stage in stages for cap in l3_by_stage.get(stage.stage_id, [])]
             return mapper.to_theme_worklet(
