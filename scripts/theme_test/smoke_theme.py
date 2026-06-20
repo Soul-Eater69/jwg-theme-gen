@@ -226,10 +226,24 @@ def _print_themes(themes: List[Worklet]) -> None:
         print("=" * 80)
 
 
+def _register_bundled_nltk_data() -> None:
+    """Point NLTK at the repo's bundled nltk_data so the evaluator finds stopwords/punkt."""
+    bundled = os.path.join(ROOT, "nltk_data")
+    if os.path.isdir(bundled):
+        try:
+            import nltk
+
+            if bundled not in nltk.data.path:
+                nltk.data.path.insert(0, bundled)
+        except ImportError:
+            pass
+
+
 def _run_coverage(raw_text: str, themes: List[Worklet]) -> None:
     """Run coverage analysis on the generated theme worklets against the raw ticket text."""
     from jwg_app.domain.services.coverage_analysis import CoverageAnalysisService
 
+    _register_bundled_nltk_data()
     service = CoverageAnalysisService()
     dataset = service.build_dataset(raw_text=raw_text, themes=themes)
     print("\n" + "=" * 80)
