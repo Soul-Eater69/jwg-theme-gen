@@ -255,9 +255,10 @@ def _run_coverage(raw_text: str, themes: List[Worklet]) -> None:
         # The n-gram evaluator (text_evaluation) is a prod dependency; print the dataset instead.
         print(f"# evaluator unavailable: {exc}")
         print("# dataset that WOULD be scored:")
-        print(json.dumps(dataset, indent=2)[:1500])
+        print(json.dumps(dataset, indent=2, default=str)[:1500])
         return
-    print(json.dumps(result, indent=2)[:3000])
+    # default=str: the evaluator returns Metric objects that aren't natively JSON-serializable.
+    print(json.dumps(result, indent=2, default=str)[:3000])
 
 
 def _build_real_platform():
