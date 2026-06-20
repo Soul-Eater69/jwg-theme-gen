@@ -68,8 +68,6 @@ class ThemeGenerationHandler:
         azure_sql_client: ThemeCatalogueReader,
         platform_client: PlatformClient,
         user_config_path: str,
-        *,
-        theme_config: ThemeGenerationConfig | None = None,
     ) -> None:
         """
         Store the injected clients and load the theme-generation usecase config.
@@ -78,14 +76,14 @@ class ThemeGenerationHandler:
             azure_sql_client: Reads the catalogue for the approved value streams.
             platform_client: Sends the structured LLM calls.
             user_config_path: Path to user_config.yaml; loaded once here.
-            theme_config: Tuning config (LLM retry policy); defaults to ``ThemeGenerationConfig()``.
         """
         self._azure_sql = azure_sql_client
         self._platform = platform_client
         config = load_config(user_config_path)
         # the theme_generation usecase: { prompt: {key: {system_role, static_prompt}}, model_params }
         self._usecase = config["theme_generation"]
-        self._retry = (theme_config or ThemeGenerationConfig()).retry
+        # LLM retry policy (transient gateway failures); the dataclass holds the defaults.
+        self._retry = ThemeGenerationConfig().retry
 
     async def run(self, er_worklet: Worklet, vs_worklets: list[Worklet]) -> list[Worklet]:
         """

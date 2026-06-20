@@ -19,13 +19,11 @@ ThemeGenerationHandler(
     azure_sql_client: ThemeCatalogueReader,   # the catalogue reader (ThemeService)
     platform_client:  PlatformClient,         # the LLM client (PlatformRestClient)
     user_config_path: str,                    # path to configs/user_config.yaml
-    *,
-    theme_config: ThemeGenerationConfig | None = None,   # optional retry tuning; default is fine
 )
 
 async def run(
     er_worklet:  Worklet,          # the Engagement Request worklet
-    vs_worklets: list[Worklet],    # the approved Value Stream worklets (one Theme each)
+    vs_worklets: list[Worklet],    # ALL approved Value Stream worklets (themes generated together)
 ) -> list[Worklet]                 # one unsaved THEME worklet per value stream
 ```
 
@@ -39,7 +37,8 @@ async def run(
   (`jwg_app/infrastructure/external/platform_rest_client.py`). The handler calls its
   `agenerate(message, model_params, output_function) -> (data, error, status_code)`.
 - **`user_config_path`** → the path to `configs/user_config.yaml` (prompts + model params).
-- **`theme_config`** → optional; see §4 (retry).
+
+The handler takes **only** those three. LLM retry is built in (see §4) - not a constructor input.
 
 ### What it returns
 
@@ -63,14 +62,17 @@ names below are read/written exactly as shown.
 
 That's all generation reads from the ER. Summary-derived fields are **not** used.
 
-### 2.2 Value Stream (VS) worklet — input
+### 2.2 Value Stream (VS) worklets — input
 
-| Read | Worklet field |
+`run` takes the **list of all approved VS worklets** and generates every theme in one call. From
+**each** worklet in the list, only the id is read:
+
+| Read (per VS worklet) | Worklet field |
 | --- | --- |
 | value-stream id (VSR…) | `source_id` (falls back to `id`) |
 
 **Only the id.** Name, description, value proposition, trigger, stages, and capabilities all come
-from SQL (the catalogue), keyed by that id. Any other properties on the VS worklet are ignored.
+from SQL (the catalogue), keyed by that id. Any other properties on the VS worklets are ignored.
 
 ### 2.3 THEME worklet — output (one per value stream)
 
@@ -82,7 +84,6 @@ Envelope: `worklet_type = THEME`, `parent_worklet_id = <vs worklet id>`, `state 
 | `title` | `"<ticket title> -- <value stream name>"` |
 | `description` | the value stream's framing paragraph over the shared body |
 | `Business Needs` | the Business Needs document (text; structure is inside the text) |
-| `Rationale` | reserved (empty) |
 | `generatedByLLM` | `true` |
 | `selectedStages` | list of selected stages (see type below) |
 | `L3 Business Capability` | list of selected L3 capabilities |
@@ -108,21 +109,12 @@ fail fast.
 
 ---
 
-## 4. Retry tuning (optional)
+## 4. LLM retry (built in)
 
-`ThemeGenerationConfig(retry=RetryConfig(...))` (`jwg_app/domain/services/theme/config.py`):
-
-```python
-RetryConfig(
-    enabled: bool = True,
-    max_attempts: int = 3,                 # 1 = no retry
-    delay_seconds: float = 1.0,            # fixed delay + small jitter (not exponential)
-    retryable_status: frozenset = {429, 502, 503, 504},
-)
-```
-
-Pass via `ThemeGenerationHandler(..., theme_config=ThemeGenerationConfig(retry=RetryConfig(enabled=False)))`.
-Omit for the defaults.
+Transient gateway failures are retried automatically inside the handler - nothing to pass. Defaults
+(`RetryConfig` in `jwg_app/domain/services/theme/config.py`): 3 attempts, ~1s fixed delay + jitter
+(not exponential), retrying only `429, 502, 503, 504`. After the attempts are exhausted the call
+surfaces a `503`. To change the policy, edit the `RetryConfig` defaults.
 
 ---
 

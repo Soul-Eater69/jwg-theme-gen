@@ -83,7 +83,6 @@ Built by `to_theme_worklet`, one per approved value stream. Returned unsaved; th
 | `title` | `"<idmt ticket title> -- <vs name>"` |
 | `description` | per-VS framing paragraph over the shared body |
 | `Business Needs` | the Business Needs text for this value stream |
-| `Rationale` | reserved (currently empty) |
 | `generatedByLLM` | `True` |
 | `selectedStages` | list of selected stages (`SelectedStage.model_dump()`) |
 | `L3 Business Capability` | selected L3 capabilities (`L3Capability.model_dump()`) |

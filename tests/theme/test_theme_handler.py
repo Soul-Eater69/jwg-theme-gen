@@ -18,7 +18,7 @@ from jwg_app.domain.models.theme_generation import (
     ValueStreamCatalogue,
 )
 from jwg_app.domain.services.theme import worklet_mapper as mapper
-from jwg_app.domain.services.theme.config import RetryConfig, ThemeGenerationConfig
+from jwg_app.domain.services.theme.config import RetryConfig
 from jwg_app.domain.services.theme_generation_handler import ThemeGenerationHandler
 
 CONFIG_PATH = str(Path(__file__).resolve().parents[2] / "configs" / "user_config.yaml")
@@ -184,20 +184,17 @@ def test_any_core_call_failure_raises_503(schema):
     # description body / framing / stage selection / capabilities are core: a failure raises and
     # aborts the whole request (not a per-VS flag). (TextOut here is the body call, which runs first.)
     platform = SchemaFailingPlatform(failing_schema=schema)
-    handler = ThemeGenerationHandler(
-        _catalogue_with_stages("vs1"), platform, CONFIG_PATH,
-        theme_config=ThemeGenerationConfig(retry=RetryConfig(enabled=False)),
-    )
+    handler = _handler_with_retry(platform, RetryConfig(enabled=False))
     with pytest.raises(CustomException) as exc:
         asyncio.run(handler.run(_er(), [_vs("vs1")]))
     assert exc.value.status_code == 503
 
 
-def _handler_with_retry(platform, retry):
-    return ThemeGenerationHandler(
-        _catalogue_with_stages("vs1"), platform, CONFIG_PATH,
-        theme_config=ThemeGenerationConfig(retry=retry),
-    )
+def _handler_with_retry(platform, retry, catalogue=None):
+    # Retry policy is internal (not a constructor arg); set it directly for fast/deterministic tests.
+    handler = ThemeGenerationHandler(catalogue or _catalogue_with_stages("vs1"), platform, CONFIG_PATH)
+    handler._retry = retry
+    return handler
 
 
 def test_retry_enabled_retries_to_limit():
@@ -248,9 +245,8 @@ def test_produces_one_theme_per_value_stream():
 def test_any_vs_business_needs_failure_raises_503():
     # one value stream's business needs fails -> the whole request fails (no partial result)
     platform = BusinessNeedsFailingPlatform(failing_vs="vs1")
-    handler = ThemeGenerationHandler(
-        _catalogue_with_stages("vs1", "vs2"), platform, CONFIG_PATH,
-        theme_config=ThemeGenerationConfig(retry=RetryConfig(enabled=False)),
+    handler = _handler_with_retry(
+        platform, RetryConfig(enabled=False), catalogue=_catalogue_with_stages("vs1", "vs2")
     )
     with pytest.raises(CustomException) as exc:
         asyncio.run(handler.run(_er(), [_vs("vs1"), _vs("vs2")]))

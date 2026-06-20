@@ -71,7 +71,6 @@ class ThemeProps:
     TITLE = "title"
     DESCRIPTION = "description"
     BUSINESS_NEEDS = "Business Needs"
-    RATIONALE = "Rationale"
     GENERATED_BY_LLM = "generatedByLLM"
     SELECTED_STAGES = "selectedStages"
     L3 = "L3 Business Capability"
@@ -171,7 +170,6 @@ def to_theme_worklet(
         ThemeProps.TITLE: title,
         ThemeProps.DESCRIPTION: description,
         ThemeProps.BUSINESS_NEEDS: business_needs,
-        ThemeProps.RATIONALE: "",
         ThemeProps.GENERATED_BY_LLM: True,
         ThemeProps.SELECTED_STAGES: [s.model_dump() for s in selected_stages],
         ThemeProps.L3: [c.model_dump() for c in l3],
