@@ -88,54 +88,33 @@ Built by `to_theme_worklet`, one per approved value stream. Returned unsaved; th
 | `selectedStages` | list of selected stages (`SelectedStage.model_dump()`) |
 | `L3 Business Capability` | selected L3 capabilities (`L3Capability.model_dump()`) |
 | `L2 Business Capability` | derived L2 capabilities (`L2Capability.model_dump()`) |
-| `generationStatus` | `"complete"` |
-
-A **failed** value stream (see partial failure below) returns a THEME worklet with only:
-
-| Property name | Content |
-| --- | --- |
-| `generationStatus` | `"failed"` |
-| `generationError` | `"<status>: <detail>"` (e.g. `"503: LLM service unavailable: ..."`) |
-| `generatedByLLM` | `True` |
 
 ---
 
 ## Failure handling
 
-`run()` returns `list[Worklet]`; the API reads `generationStatus` per worklet. Failures fall in two
-tiers:
+Generation is **all-or-nothing**: `run()` returns `list[Worklet]` (one theme per value stream) only
+when *every* value stream succeeds; otherwise it raises `CustomException` and returns nothing. There
+are no partial results and no per-theme failure flags - the UI either shows the full set or a clean
+error, which is the right contract when failed themes aren't surfaced in the UI and there is no
+per-theme regeneration.
 
-- **Core failure → the whole request raises** `CustomException` (no list returned). Core =
-  catalogue read + the batched, all-value-stream LLM calls (description body, description framing,
-  stage selection, capabilities). These are shared/foundational, so if any fails after retries the
-  request fails: `404` (missing worklets), `503` (Azure SQL or a core LLM call unavailable).
-- **Per-VS failure → that value stream is flagged, others still succeed.** After the core phase,
-  each value stream's own flow (business needs + assembly) runs in isolation. If one fails after
-  retries, its worklet comes back with `generationStatus="failed"` + `generationError`, and the
-  remaining value streams return complete themes; the request does **not** raise. Per-VS failures:
-  `503` (business needs unavailable) and `400` (the value stream resolved no stages - a defensive
-  guard; not expected, since an approved value stream has governed stages). Note: when the LLM
-  selects no stage, the resolver falls back to all of that value stream's catalogue stages (not a
-  failure).
-
-Transient LLM failures (429 / 5xx / timeout) are retried per the theme retry config before either
-tier treats the call as failed.
+Every value stream is attempted, and each LLM call retried (429 / 5xx / timeout, per the theme retry
+config), **before** the request fails. Every error is logged (`logger.error`) before it surfaces, so
+an aborted request is traceable in the logs as well as the response.
 
 ### Error reference
 
-Every error is logged before it surfaces (`logger.error` in the handler), so an aborted request or a
-failed value stream is traceable in the logs as well as the response.
+| Status | Condition |
+| --- | --- |
+| `404` | ER worklet or VS worklet not found |
+| `503` | Azure SQL service unavailable |
+| `503` | LLM service unavailable after retries (description body/framing, stage selection, capabilities, or any value stream's business needs) |
+| `400` | A value stream resolved no stages (defensive; not expected, since an approved value stream has governed stages) |
 
-| Status | Condition | Tier | Surfaced as |
-| --- | --- | --- | --- |
-| `404` | ER worklet or VS worklet not found | core | raised `CustomException` (aborts) |
-| `503` | Azure SQL service unavailable | core | raised `CustomException` (aborts) |
-| `503` | LLM service unavailable (description body/framing, stage selection, or capabilities) after retries | core | raised `CustomException` (aborts) |
-| `503` | LLM service unavailable (business needs) after retries | per-VS | failed worklet (`generationStatus="failed"`, `generationError`) |
-| `400` | No valid stages resolved for this value stream (defensive; not expected) | per-VS | failed worklet (`generationStatus="failed"`, `generationError`) |
-
-Retryable (before the above): `429`, `502`, `503`, `504`. Not retried (fail fast): `400`, `401`,
-`403`, `404`, `500` (the gateway folds real bugs into `500`).
+Note: when the LLM selects no stage for a value stream, the resolver falls back to all of that value
+stream's catalogue stages (not a failure). Retryable before the above: `429`, `502`, `503`, `504`.
+Not retried (fail fast): `400`, `401`, `403`, `404`, `500` (the gateway folds real bugs into `500`).
 
 ---
 

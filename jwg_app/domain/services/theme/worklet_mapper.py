@@ -76,13 +76,6 @@ class ThemeProps:
     SELECTED_STAGES = "selectedStages"
     L3 = "L3 Business Capability"
     L2 = "L2 Business Capability"
-    GENERATION_STATUS = "generationStatus"  # "complete" | "failed"
-    GENERATION_ERROR = "generationError"  # error detail when failed
-
-
-class GenerationStatus:
-    COMPLETE = "complete"
-    FAILED = "failed"
 
 
 def value_stream_id(vs_worklet: Worklet) -> str:
@@ -183,46 +176,12 @@ def to_theme_worklet(
         ThemeProps.SELECTED_STAGES: [s.model_dump() for s in selected_stages],
         ThemeProps.L3: [c.model_dump() for c in l3],
         ThemeProps.L2: [c.model_dump() for c in l2],
-        ThemeProps.GENERATION_STATUS: GenerationStatus.COMPLETE,
     }
 
     for name, value in properties.items():
         set_property(theme, name, value)
 
     return theme
-
-
-def to_failed_theme_worklet(vs_worklet: Worklet, *, status_code: int, error: str) -> Worklet:
-    """
-    Build a THEME worklet marking that this value stream's generation failed.
-
-    Returned alongside the successful themes so the API sees which value streams failed and why; the
-    other value streams are unaffected.
-
-    Args:
-        vs_worklet: The parent value-stream worklet.
-        status_code: The failure status code (e.g. 503).
-        error: The failure detail.
-
-    Returns:
-        A THEME worklet with generationStatus="failed" and the error, but no generated content.
-    """
-    theme = Worklet(
-        id=None,
-        worklet_type=WorkletType.THEME,
-        parent_worklet_id=vs_worklet.id,
-        source_id=None,
-        state=RecordState.CREATED,
-    )
-    set_property(theme, ThemeProps.GENERATION_STATUS, GenerationStatus.FAILED)
-    set_property(theme, ThemeProps.GENERATION_ERROR, f"{status_code}: {error}")
-    set_property(theme, ThemeProps.GENERATED_BY_LLM, True)
-    return theme
-
-
-def is_failed_theme(theme: Worklet) -> bool:
-    """Return True if the theme worklet is a failed-generation marker."""
-    return get_property(theme, ThemeProps.GENERATION_STATUS) == GenerationStatus.FAILED
 
 
 def _worklet_identity(worklet: Worklet) -> str:

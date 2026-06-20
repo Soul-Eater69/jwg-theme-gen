@@ -96,17 +96,15 @@ class ThemeGenerationHandler:
             vs_worklets: The approved value-stream worklets, one Theme each.
 
         Returns:
-            One unsaved THEME worklet per approved value stream, for the caller to persist. Each
-            worklet carries ``generationStatus`` = "complete" or "failed"; a failed worklet (one
-            value stream whose per-VS flow could not complete) also carries ``generationError``,
-            while the other value streams still succeed.
+            One unsaved THEME worklet per approved value stream, for the caller to persist. The call
+            is all-or-nothing: either every value stream produces a theme, or the request raises.
 
         Raises:
-            CustomException: A core failure that aborts the whole request - 404 if the ER or VS
-                worklets are missing; 503 if Azure SQL or a core LLM call (description body/framing,
-                stage selection, capabilities) is unavailable after retries. Per-VS failures do NOT
-                raise; they are returned as failed worklets (503 if business needs is unavailable,
-                400 if - unexpectedly - the value stream resolved no stages).
+            CustomException: Aborts the whole request - 404 if the ER or VS worklets are missing; 503
+                if Azure SQL or any LLM call (description body/framing, stage selection, capabilities,
+                or a value stream's business needs) is unavailable after retries; 400 if a value
+                stream unexpectedly resolved no stages. Every value stream is attempted (and each call
+                retried) before the request fails.
         """
         if er_worklet is None or not vs_worklets:
             logger.error("theme generation aborted (404): ER worklet or VS worklet not found")
@@ -152,21 +150,26 @@ class ThemeGenerationHandler:
         # Step 2 — capabilities (one merged call across all value streams).
         l3_by_stage = await self._capability_selection(er, vs_list, stages_by_vs, catalogue)
 
-        # --- Per-VS phase: each value stream's own flow. One VS failing does not stop the others. ---
-        themes = await asyncio.gather(
+        # --- Per-VS phase: each value stream's own flow (business needs + assembly). Every value
+        # stream is attempted (and each call retried) before we decide; if ANY fails, the whole
+        # request fails - all-or-nothing, so the caller never receives a silently-incomplete set.
+        results = await asyncio.gather(
             *(
-                self._build_theme_isolated(worklet, vs_by_id[vs_id], er, stages_by_vs, l3_by_stage, body, framings)
+                self._build_theme(worklet, vs_by_id[vs_id], er, stages_by_vs, l3_by_stage, body, framings)
                 for worklet, vs_id in zip(vs_worklets, vs_ids)
-            )
+            ),
+            return_exceptions=True,
         )
-        failed = sum(1 for t in themes if mapper.is_failed_theme(t))
-        logger.info(
-            "theme generation finished: %d theme(s), %d complete, %d failed",
-            len(themes), len(themes) - failed, failed,
-        )
-        return list(themes)
+        for vs_id, result in zip(vs_ids, results):
+            if isinstance(result, BaseException):
+                detail = result.detail if isinstance(result, CustomException) else str(result)
+                logger.error("theme generation failed for value stream %s: %s", vs_id, detail)
+                raise result
 
-    async def _build_theme_isolated(
+        logger.info("theme generation finished: %d theme(s) produced", len(results))
+        return list(results)
+
+    async def _build_theme(
         self,
         vs_worklet: Worklet,
         vs: VSContext,
@@ -178,34 +181,25 @@ class ThemeGenerationHandler:
     ) -> Worklet:
         """Run one value stream's flow (business needs + assembly) and build its THEME worklet.
 
-        A failure in this VS's flow (e.g. business needs unavailable after retries) is caught and
-        returned as a failed worklet, so the other value streams still produce their themes.
+        Raises ``CustomException`` on failure; the caller aborts the whole request (all-or-nothing).
         """
         stages = stages_by_vs.get(vs.vs_id, [])
-        try:
-            if not stages:
-                # Defensive: an approved value stream is expected to have governed stages, so this
-                # should not happen - flag it per-VS rather than build a stageless theme.
-                raise CustomException(
-                    status_code=400, detail="No valid stages resolved for this Value Stream"
-                )
-            business_needs = await self._business_needs_for_vs(er, vs, stages)
-            l3 = [cap for stage in stages for cap in l3_by_stage.get(stage.stage_id, [])]
-            return mapper.to_theme_worklet(
-                vs_worklet,
-                title=f"{er.idmt_ticket_title} -- {vs.vs_name}",
-                description=self._theme_description(framings.get(vs.vs_id, ""), body),
-                business_needs=business_needs,
-                selected_stages=stages,
-                l3=l3,
-                l2=resolver.derive_l2(l3),
+        if not stages:
+            # Defensive: an approved value stream is expected to have governed stages.
+            raise CustomException(
+                status_code=400, detail="No valid stages resolved for this Value Stream"
             )
-        except CustomException as exc:
-            logger.error(
-                "theme generation failed for value stream %s (%s): %s",
-                vs.vs_id, exc.status_code, exc.detail,
-            )
-            return mapper.to_failed_theme_worklet(vs_worklet, status_code=exc.status_code, error=exc.detail)
+        business_needs = await self._business_needs_for_vs(er, vs, stages)
+        l3 = [cap for stage in stages for cap in l3_by_stage.get(stage.stage_id, [])]
+        return mapper.to_theme_worklet(
+            vs_worklet,
+            title=f"{er.idmt_ticket_title} -- {vs.vs_name}",
+            description=self._theme_description(framings.get(vs.vs_id, ""), body),
+            business_needs=business_needs,
+            selected_stages=stages,
+            l3=l3,
+            l2=resolver.derive_l2(l3),
+        )
 
     async def _description_body(self, er: ERContext) -> str:
         """

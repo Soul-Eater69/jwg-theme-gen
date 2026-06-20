@@ -162,14 +162,12 @@ def test_catalogue_failure_raises_503():
     assert exc.value.status_code == 503
 
 
-def test_vs_with_no_stages_is_flagged_400_others_succeed():
-    # vs1 has stages, vs2 has none -> vs1 complete, vs2 flagged 400 (per-VS, not a global abort)
+def test_vs_with_no_stages_raises_400():
+    # all-or-nothing: a value stream with no stages fails the whole request
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), FakePlatform(), CONFIG_PATH)
-    themes = asyncio.run(handler.run(_er(), [_vs("vs1"), _vs("vs2")]))
-    assert len(themes) == 2
-    by_status = {mapper.get_property(t, mapper.ThemeProps.GENERATION_STATUS): t for t in themes}
-    assert set(by_status) == {"complete", "failed"}
-    assert "400" in mapper.get_property(by_status["failed"], mapper.ThemeProps.GENERATION_ERROR, "")
+    with pytest.raises(CustomException) as exc:
+        asyncio.run(handler.run(_er(), [_vs("vs1"), _vs("vs2")]))
+    assert exc.value.status_code == 400
 
 
 def test_non_retryable_llm_failure_raises_503():
@@ -233,33 +231,27 @@ def test_non_retryable_status_is_not_retried(status):
 
 # ---- happy path (multiple value streams) ----------------------------------------------
 
-def test_produces_one_complete_theme_per_value_stream():
+def test_produces_one_theme_per_value_stream():
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1", "vs2"), FakePlatform(), CONFIG_PATH)
     themes = asyncio.run(handler.run(_er(), [_vs("vs1"), _vs("vs2")]))
 
     assert len(themes) == 2
-    assert not any(mapper.is_failed_theme(t) for t in themes)
     titles = [mapper.get_property(t, mapper.ThemeProps.TITLE, "") for t in themes]
     assert all("Ticket Title" in t for t in titles)
     for theme in themes:
-        assert mapper.get_property(theme, mapper.ThemeProps.GENERATION_STATUS) == "complete"
         stages = mapper.get_property(theme, mapper.ThemeProps.SELECTED_STAGES, [])
         assert len(stages) == 1
 
 
-# ---- per-VS isolation -----------------------------------------------------------------
+# ---- all-or-nothing -------------------------------------------------------------------
 
-def test_per_vs_business_needs_failure_is_flagged_not_raised():
+def test_any_vs_business_needs_failure_raises_503():
+    # one value stream's business needs fails -> the whole request fails (no partial result)
     platform = BusinessNeedsFailingPlatform(failing_vs="vs1")
     handler = ThemeGenerationHandler(
         _catalogue_with_stages("vs1", "vs2"), platform, CONFIG_PATH,
         theme_config=ThemeGenerationConfig(retry=RetryConfig(enabled=False)),
     )
-    themes = asyncio.run(handler.run(_er(), [_vs("vs1"), _vs("vs2")]))
-
-    assert len(themes) == 2  # both returned; vs1 failed, vs2 complete
-    by_status = {mapper.get_property(t, mapper.ThemeProps.GENERATION_STATUS): t for t in themes}
-    assert set(by_status) == {"failed", "complete"}
-    failed = by_status["failed"]
-    assert mapper.is_failed_theme(failed)
-    assert "503" in mapper.get_property(failed, mapper.ThemeProps.GENERATION_ERROR, "")
+    with pytest.raises(CustomException) as exc:
+        asyncio.run(handler.run(_er(), [_vs("vs1"), _vs("vs2")]))
+    assert exc.value.status_code == 503
