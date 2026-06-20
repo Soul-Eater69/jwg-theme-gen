@@ -215,11 +215,13 @@ def test_retry_disabled_makes_single_attempt():
     assert platform.calls == 1  # flag off -> no retry
 
 
-def test_non_retryable_status_is_not_retried():
-    platform = CountingPlatform(status=400)
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 500])
+def test_non_retryable_status_is_not_retried(status):
+    # 500 is deliberately NOT retried (the gateway folds real bugs into it).
+    platform = CountingPlatform(status=status)
     handler = _handler_with_retry(platform, RetryConfig(max_attempts=3, delay_seconds=0))
     asyncio.run(handler._agenerate_with_retry("k", [{"role": "user", "content": "x"}], TextOut))
-    assert platform.calls == 1  # 400 is not retryable
+    assert platform.calls == 1
 
 
 # ---- happy path (multiple value streams) ----------------------------------------------
