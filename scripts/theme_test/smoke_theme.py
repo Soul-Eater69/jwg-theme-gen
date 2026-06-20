@@ -6,10 +6,15 @@ use the prod PlatformRestClient, configured from the app's existing settings in 
 (CORE_PLATFORM_ENDPOINT / VERIFY_SSL / APP_ID) plus PLATFORM_AUTH_TOKEN (the bearer from
 `python -m scripts.print_token` in the teg repo).
 
+The ticket raw text fed to generation comes from scripts/theme_test/raw_text.txt (edit it to test a
+real ticket); --raw-text-file points elsewhere. --coverage scores the generated themes against the
+raw text via CoverageAnalysisService.
+
 Run from the repo root:
     python scripts/theme_test/smoke_theme.py
     python scripts/theme_test/smoke_theme.py --real-llm
     python scripts/theme_test/smoke_theme.py --real-db --real-llm
+    python scripts/theme_test/smoke_theme.py --real-db --real-llm --coverage
 """
 
 from __future__ import annotations
@@ -27,7 +32,9 @@ for _p in (HERE, ROOT):
 
 import argparse  # noqa: E402
 import asyncio  # noqa: E402
+import json  # noqa: E402
 import logging  # noqa: E402
+from pathlib import Path  # noqa: E402
 from typing import Any, Dict, List, Optional, Sequence, Tuple  # noqa: E402
 
 from worklet_data_api import Worklet  # noqa: E402  (stub)
@@ -47,6 +54,12 @@ from jwg_app.domain.services.theme_generation_handler import (  # noqa: E402
 
 CONFIG_PATH = os.path.join(ROOT, "configs", "user_config.yaml")
 TICKET_ID = "IDMT-19761"
+RAW_TEXT_FILE = os.path.join(HERE, "raw_text.txt")  # the ticket raw text fed to generation
+DEFAULT_RAW_TEXT = (
+    "The business needs a faster way to procure approved physical assets (order management and "
+    "vendor contract negotiation) and to streamline claims adjudication and pricing for members "
+    "and providers in the new fiscal year."
+)
 
 # Multiple approved value streams -> exercises the batched stage/capability calls, the per-VS
 # parallel business-needs, and the resolver's cross-VS reassignment. Use real VSR ids for --real-db.
@@ -163,18 +176,25 @@ def _prop(name: str, value: Any) -> Property:
     return Property(property_name=name, property_value=value)
 
 
-def build_er_worklet() -> Worklet:
+def _load_raw_text(path: str) -> str:
+    """Read the ticket raw text from a file; fall back to the built-in sample if absent/empty."""
+    p = Path(path)
+    if p.is_file():
+        text = p.read_text(encoding="utf-8").strip()
+        if text:
+            print(f"# raw text from {path} ({len(text)} chars)")
+            return text
+    print(f"# raw text file not found/empty ({path}); using built-in sample")
+    return DEFAULT_RAW_TEXT
+
+
+def build_er_worklet(raw_text: str) -> Worklet:
     return Worklet(
         id=TICKET_ID,
         source_id=TICKET_ID,
         properties=[
             _prop("title", "New physical asset procurement initiative"),
-            _prop(
-                "rawText",
-                "The business needs a faster way to procure approved physical assets (order "
-                "management and vendor contract negotiation) and to streamline claims adjudication "
-                "and pricing for members and providers in the new fiscal year.",
-            ),
+            _prop("rawText", raw_text),
         ],
     )
 
@@ -208,6 +228,26 @@ def _print_themes(themes: List[Worklet]) -> None:
         print(f"BUSINESS NEEDS:\n{needs}\n")
         print(f"SELECTED STAGES: {len(stages)} | L3: {len(l3)} | L2: {len(l2)}")
         print("=" * 80)
+
+
+def _run_coverage(raw_text: str, themes: List[Worklet]) -> None:
+    """Run coverage analysis on the generated theme worklets against the raw ticket text."""
+    from jwg_app.domain.services.coverage_analysis import CoverageAnalysisService
+
+    service = CoverageAnalysisService()
+    dataset = service.build_dataset(raw_text=raw_text, themes=themes)
+    print("\n" + "=" * 80)
+    print(f"# coverage analysis: {len(dataset['generated_text'])} theme(s) scored vs raw text "
+          f"({len(raw_text)} chars)")
+    try:
+        result = service.analyze(raw_text=raw_text, themes=themes)
+    except RuntimeError as exc:
+        # The n-gram evaluator (text_evaluation) is a prod dependency; print the dataset instead.
+        print(f"# evaluator unavailable: {exc}")
+        print("# dataset that WOULD be scored:")
+        print(json.dumps(dataset, indent=2)[:1500])
+        return
+    print(json.dumps(result, indent=2)[:3000])
 
 
 def _build_real_platform():
@@ -275,7 +315,8 @@ async def main(args: argparse.Namespace) -> None:
     if args.debug:
         platform = _DebugPlatform(platform)
 
-    er_worklet, vs_worklets = build_er_worklet(), build_vs_worklets()
+    raw_text = _load_raw_text(args.raw_text_file)
+    er_worklet, vs_worklets = build_er_worklet(raw_text), build_vs_worklets()
     vs_ids = [mapper.value_stream_id(w) for w in vs_worklets]
     print(f"# {len(vs_worklets)} value stream(s): {vs_ids} | only={args.only}")
 
@@ -283,7 +324,10 @@ async def main(args: argparse.Namespace) -> None:
         catalogue = await _fetch_catalogue(args, vs_ids)
         handler = ThemeGenerationHandler(_StaticCatalogue(catalogue), platform, CONFIG_PATH)
         if args.only == "all":
-            _print_themes(await handler.run(er_worklet, vs_worklets))
+            themes = await handler.run(er_worklet, vs_worklets)
+            _print_themes(themes)
+            if args.coverage:
+                _run_coverage(raw_text, themes)
         else:
             await _run_only(handler, args.only, er_worklet, vs_worklets, catalogue)
     finally:
@@ -374,5 +418,9 @@ if __name__ == "__main__":
         default="all",
         help="generate just one part in isolation (to show a reviewer each output)",
     )
+    parser.add_argument("--raw-text-file", default=RAW_TEXT_FILE,
+                        help="file holding the ticket raw text fed to generation (default raw_text.txt)")
+    parser.add_argument("--coverage", action="store_true",
+                        help="run coverage analysis on the generated themes (only with --only all)")
     main_args = parser.parse_args()
     asyncio.run(main(main_args))

@@ -1,0 +1,123 @@
+"""Tests for the Theme coverage-analysis adapter."""
+
+from jwg_app.domain.services.coverage_analysis import CoverageAnalysisService
+
+
+class _Prop:
+    def __init__(self, name, value):
+        self.property_name = name
+        self.property_value = value
+
+
+class _Worklet:
+    def __init__(self, properties=None):
+        self.properties = properties or []
+
+
+class _FakeEvaluator:
+    def __init__(self):
+        self.dataset = None
+
+    def evaluate(self, dataset):
+        self.dataset = dataset
+        return [{"coverage": 0.75}]
+
+
+def _theme(description, business_needs):
+    return _Worklet(
+        [
+            _Prop(CoverageAnalysisService.THEME_DESCRIPTION_PROPERTY, description),
+            _Prop(CoverageAnalysisService.THEME_BUSINESS_NEEDS_PROPERTY, business_needs),
+            _Prop(CoverageAnalysisService.THEME_GENERATION_STATUS_PROPERTY, "complete"),
+        ]
+    )
+
+
+def _failed_theme():
+    return _Worklet(
+        [
+            _Prop(
+                CoverageAnalysisService.THEME_GENERATION_STATUS_PROPERTY,
+                CoverageAnalysisService.FAILED_STATUS,
+            )
+        ]
+    )
+
+
+def test_build_dataset_uses_existing_evaluator_property_names():
+    service = CoverageAnalysisService()
+
+    dataset = service.build_dataset(
+        raw_text="raw ticket",
+        themes=[_theme("theme description", "theme business needs")],
+    )
+
+    assert dataset["context"] == [
+        {"propertyValue": "raw ticket", "propertyName": "acceptanceCriteria"}
+    ]
+    assert dataset["generated_text"] == [
+        [
+            {"propertyValue": "theme description", "propertyName": "title"},
+            {"propertyValue": "theme business needs", "propertyName": "description"},
+        ]
+    ]
+    assert dataset["n"] == 1
+    assert dataset["remove_stopwords"] is True
+    assert dataset["coverage_color"] == "green"
+    assert dataset["creativity_color"] == "orange"
+
+
+def test_analyze_delegates_to_evaluator_with_dataset():
+    evaluator = _FakeEvaluator()
+    service = CoverageAnalysisService(evaluator=evaluator)
+
+    result = service.analyze(
+        raw_text="raw",
+        themes=[_theme("desc", "needs")],
+        n=2,
+        remove_stopwords=False,
+    )
+
+    assert result == [{"coverage": 0.75}]
+    assert evaluator.dataset["n"] == 2
+    assert evaluator.dataset["remove_stopwords"] is False
+
+
+def test_build_dataset_uses_all_generated_themes_in_one_call():
+    service = CoverageAnalysisService()
+
+    dataset = service.build_dataset(
+        raw_text="raw",
+        themes=[
+            _theme("desc 1", "needs 1"),
+            _theme("desc 2", "needs 2"),
+        ],
+    )
+
+    assert dataset["generated_text"] == [
+        [
+            {"propertyValue": "desc 1", "propertyName": "title"},
+            {"propertyValue": "needs 1", "propertyName": "description"},
+        ],
+        [
+            {"propertyValue": "desc 2", "propertyName": "title"},
+            {"propertyValue": "needs 2", "propertyName": "description"},
+        ],
+    ]
+
+
+def test_analysis_property_wraps_result_for_api_contract():
+    analysis = [{"metric_name": "Coverage", "metric_value": {"score": 0.78}}]
+
+    assert CoverageAnalysisService().analysis_property(analysis) == {
+        "propertyName": "analysis",
+        "propertyValue": analysis,
+    }
+
+
+def test_failed_themes_are_not_scored():
+    service = CoverageAnalysisService()
+
+    dataset = service.build_dataset(raw_text="raw", themes=[_failed_theme()])
+
+    assert dataset["generated_text"] == []

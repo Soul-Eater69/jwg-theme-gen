@@ -1,0 +1,4 @@
+The business needs a faster way to procure approved physical assets (order management and vendor
+contract negotiation) and to streamline claims adjudication and pricing for members and providers in
+the new fiscal year. Replace this file's contents with a real IDMT ticket's raw text (description +
+extracted attachment text) to run theme generation on an actual ticket.

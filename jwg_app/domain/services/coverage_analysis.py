@@ -1,0 +1,171 @@
+"""
+Coverage analysis for generated Theme worklets.
+
+This service adapts the Theme generation output to the existing n-gram evaluator contract. The
+evaluator expects a raw context property named ``acceptanceCriteria`` and generated entities with
+``title`` / ``description`` properties. For Themes, we send the Theme description and Business
+Needs texts through those two evaluator fields.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from worklet_data_api import Worklet
+
+
+@dataclass(frozen=True)
+class AnalysisProperty:
+    """One property-shaped text field consumed or produced by the evaluator."""
+
+    property_name: str
+    property_value: str
+
+    def to_evaluator_property(self) -> dict[str, str]:
+        return {
+            "propertyName": self.property_name,
+            "propertyValue": self.property_value,
+        }
+
+
+class CoverageEvaluator(Protocol):
+    """Evaluator interface implemented by ``NgramEvaluator`` and by tests."""
+
+    def evaluate(self, dataset: dict[str, Any]) -> list[dict[str, Any]]:
+        """Return coverage/creativity scoring output for the evaluator dataset."""
+        ...
+
+
+class CoverageAnalysisService:
+    """Build evaluator input for generated Themes and run coverage analysis."""
+
+    ANALYSIS_PROPERTY = "analysis"
+
+    # These names match ``theme.worklet_mapper.ThemeProps`` without importing the generator stack.
+    THEME_DESCRIPTION_PROPERTY = "description"
+    THEME_BUSINESS_NEEDS_PROPERTY = "Business Needs"
+    THEME_GENERATION_STATUS_PROPERTY = "generationStatus"
+    FAILED_STATUS = "failed"
+
+    CONTEXT_PROPERTY = "acceptanceCriteria"
+    GENERATED_TITLE_PROPERTY = "title"
+    GENERATED_DESCRIPTION_PROPERTY = "description"
+
+    def __init__(self, evaluator: CoverageEvaluator | None = None) -> None:
+        self._evaluator = evaluator
+
+    def analyze(
+        self,
+        *,
+        raw_text: str,
+        themes: list[Worklet],
+        n: int = 1,
+        remove_stopwords: bool = True,
+        coverage_color: Any = "green",
+        creativity_color: Any = "orange",
+    ) -> list[dict[str, Any]]:
+        """
+        Score generated Themes against the raw engagement-request text.
+
+        Args:
+            raw_text: The original raw ticket text.
+            themes: Generated Theme worklets. Failed-generation markers are ignored.
+            n: N-gram size used by the evaluator.
+            remove_stopwords: Whether evaluator stopword filtering is enabled.
+            coverage_color: Highlight color for covered source text.
+            creativity_color: Highlight color for generated text not grounded in the source.
+
+        Returns:
+            The evaluator's coverage/creativity result list.
+        """
+        dataset = self.build_dataset(
+            raw_text=raw_text,
+            themes=themes,
+            n=n,
+            remove_stopwords=remove_stopwords,
+            coverage_color=coverage_color,
+            creativity_color=creativity_color,
+        )
+        return self._get_evaluator().evaluate(dataset)
+
+    def analysis_property(self, analysis: list[dict[str, Any]]) -> dict[str, Any]:
+        """Wrap evaluator output in the ``analysis`` property shape from the API contract."""
+        return {
+            "propertyName": self.ANALYSIS_PROPERTY,
+            "propertyValue": analysis,
+        }
+
+    def build_dataset(
+        self,
+        *,
+        raw_text: str,
+        themes: list[Worklet],
+        n: int = 1,
+        remove_stopwords: bool = True,
+        coverage_color: Any = "green",
+        creativity_color: Any = "orange",
+    ) -> dict[str, Any]:
+        """
+        Build the evaluator dataset without running the evaluator.
+
+        The property names intentionally match the existing evaluator contract:
+        ``acceptanceCriteria`` for raw context, and ``title`` / ``description`` for generated text.
+        """
+        return {
+            "context": [
+                AnalysisProperty(self.CONTEXT_PROPERTY, raw_text).to_evaluator_property()
+            ],
+            "generated_text": [
+                self._generated_theme_properties(theme)
+                for theme in themes
+                if not self._is_failed_theme(theme)
+            ],
+            "n": n,
+            "remove_stopwords": remove_stopwords,
+            "coverage_color": _enum_value(coverage_color),
+            "creativity_color": _enum_value(creativity_color),
+        }
+
+    def _generated_theme_properties(self, theme: Worklet) -> list[dict[str, str]]:
+        description = _get_property(theme, self.THEME_DESCRIPTION_PROPERTY, "") or ""
+        business_needs = _get_property(theme, self.THEME_BUSINESS_NEEDS_PROPERTY, "") or ""
+        return [
+            AnalysisProperty(
+                self.GENERATED_TITLE_PROPERTY, str(description)
+            ).to_evaluator_property(),
+            AnalysisProperty(
+                self.GENERATED_DESCRIPTION_PROPERTY, str(business_needs)
+            ).to_evaluator_property(),
+        ]
+
+    def _is_failed_theme(self, theme: Worklet) -> bool:
+        return _get_property(theme, self.THEME_GENERATION_STATUS_PROPERTY) == self.FAILED_STATUS
+
+    def _get_evaluator(self) -> CoverageEvaluator:
+        if self._evaluator is None:
+            self._evaluator = _load_default_evaluator()
+        return self._evaluator
+
+
+def _load_default_evaluator() -> CoverageEvaluator:
+    try:
+        from text_evaluation.ngram_evaluation import NgramEvaluator
+    except ImportError as exc:
+        raise RuntimeError(
+            "Coverage analysis requires text_evaluation.ngram_evaluation.NgramEvaluator"
+        ) from exc
+    return NgramEvaluator()
+
+
+def _enum_value(value: Any) -> str:
+    return value.value if hasattr(value, "value") else str(value)
+
+
+def _get_property(worklet: Worklet, name: str, default: Any = None) -> Any:
+    for prop in getattr(worklet, "properties", []) or []:
+        prop_name = getattr(prop, "property_name", getattr(prop, "propertyName", None))
+        if prop_name == name:
+            return getattr(prop, "property_value", getattr(prop, "propertyValue", default))
+    return default
