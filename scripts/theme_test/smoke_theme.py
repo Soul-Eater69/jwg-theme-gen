@@ -257,8 +257,15 @@ def _run_coverage(raw_text: str, themes: List[Worklet]) -> None:
         print("# dataset that WOULD be scored:")
         print(json.dumps(dataset, indent=2, default=str)[:1500])
         return
+
     # default=str: the evaluator returns Metric objects that aren't natively JSON-serializable.
-    print(json.dumps(result, indent=2, default=str)[:3000])
+    for i, entry in enumerate(result, 1):
+        print(f"\n--- result {i} ---")
+        if isinstance(entry, dict):
+            # scalar fields first (the coverage / creativity scores), then the full structure
+            scores = {k: v for k, v in entry.items() if not isinstance(v, (list, dict))}
+            print("scores:", json.dumps(scores, indent=2, default=str))
+        print(json.dumps(entry, indent=2, default=str))
 
 
 def _build_real_platform():
