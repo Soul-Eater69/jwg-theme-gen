@@ -64,9 +64,37 @@ catalogue ids, not free text, so they are not coverage-scored.)
 }
 ```
 
-`analyze(...)` builds this and calls `evaluator.evaluate(dataset)`; the result is the
-coverage/creativity scoring + highlight spans. `analysis_property(result)` wraps it as the
-`{ propertyName: "analysis", propertyValue: result }` shape the API contract expects.
+`analyze(...)` builds this and calls `evaluator.evaluate(dataset)`; the result is one entry per
+metric (Coverage, Creativity) as `Metric` objects. `analysis_property(result)` serializes those to
+JSON-safe dicts and wraps them as the `analysis` worklet property the API returns on the ER:
+
+```json
+{
+  "propertyName": "analysis",
+  "propertyValue": [
+    {
+      "metric_name": "Coverage",
+      "metric_value": { "score": 0.78, "highlighted_text": "<span style='background-color: green'>member portal</span> ..." }
+    },
+    {
+      "metric_name": "Creativity",
+      "metric_value": {
+        "score": 0.42,
+        "scores": [0.35, 0.50, 0.41],
+        "highlighted_text": [
+          [ { "propertyName": "title", "propertyValue": "... <span style='background-color: orange'>...</span>" },
+            { "propertyName": "description", "propertyValue": "..." } ]
+        ]
+      }
+    }
+  ]
+}
+```
+
+The `Metric` objects aren't natively JSON-serializable, so `analysis_property` runs them through a
+recursive `_to_jsonable` pass (pydantic `model_dump` / `__dict__` / dict / list) before wrapping -
+the result drops straight into a worklet property and the API response. The caller upserts this
+property on the **ER** worklet (the analysis scores how well the generated themes cover the ER).
 
 ## Behaviour notes
 

@@ -90,11 +90,16 @@ class CoverageAnalysisService:
         )
         return self._get_evaluator().evaluate(dataset)
 
-    def analysis_property(self, analysis: list[dict[str, Any]]) -> dict[str, Any]:
-        """Wrap evaluator output in the ``analysis`` property shape from the API contract."""
+    def analysis_property(self, analysis: list[Any]) -> dict[str, Any]:
+        """Wrap evaluator output in the ``analysis`` worklet property from the API contract.
+
+        The evaluator returns one entry per metric (Coverage, Creativity). Each is serialized to a
+        plain, JSON-safe ``{"metric_name": ..., "metric_value": {...}}`` dict so the property can be
+        set on the ER worklet and serialized straight to the API response.
+        """
         return {
             "propertyName": self.ANALYSIS_PROPERTY,
-            "propertyValue": analysis,
+            "propertyValue": [_to_jsonable(metric) for metric in analysis],
         }
 
     def build_dataset(
@@ -161,6 +166,27 @@ def _load_default_evaluator() -> CoverageEvaluator:
 
 def _enum_value(value: Any) -> str:
     return value.value if hasattr(value, "value") else str(value)
+
+
+def _to_jsonable(obj: Any) -> Any:
+    """Recursively convert evaluator output (e.g. Metric objects) to JSON-serializable values.
+
+    A pydantic ``Metric`` becomes ``{"metric_name": ..., "metric_value": {...}}`` via ``model_dump``;
+    dicts/lists recurse; plain objects fall back to their ``__dict__``; everything else is stringified.
+    """
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, dict):
+        return {key: _to_jsonable(value) for key, value in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_jsonable(item) for item in obj]
+    if hasattr(obj, "model_dump"):  # pydantic Metric
+        return _to_jsonable(obj.model_dump())
+    if hasattr(obj, "_asdict"):  # namedtuple
+        return _to_jsonable(obj._asdict())
+    if hasattr(obj, "__dict__"):  # plain object
+        return _to_jsonable(vars(obj))
+    return str(obj)
 
 
 def _get_property(worklet: Worklet, name: str, default: Any = None) -> Any:

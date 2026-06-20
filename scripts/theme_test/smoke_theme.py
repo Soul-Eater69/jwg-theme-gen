@@ -258,14 +258,17 @@ def _run_coverage(raw_text: str, themes: List[Worklet]) -> None:
         print(json.dumps(dataset, indent=2, default=str)[:1500])
         return
 
-    # default=str: the evaluator returns Metric objects that aren't natively JSON-serializable.
-    for i, entry in enumerate(result, 1):
-        print(f"\n--- result {i} ---")
-        if isinstance(entry, dict):
-            # scalar fields first (the coverage / creativity scores), then the full structure
-            scores = {k: v for k, v in entry.items() if not isinstance(v, (list, dict))}
-            print("scores:", json.dumps(scores, indent=2, default=str))
-        print(json.dumps(entry, indent=2, default=str))
+    # The serialized worklet "analysis" property - exactly what the API would return on the ER.
+    analysis = service.analysis_property(result)
+    for metric in analysis["propertyValue"]:
+        name = metric.get("metric_name")
+        value = metric.get("metric_value", {})
+        print(f"\n--- {name} ---  score={value.get('score')}", end="")
+        if "scores" in value:
+            print(f"  per-theme={value.get('scores')}", end="")
+        print()
+    print("\n# full analysis property:")
+    print(json.dumps(analysis, indent=2))
 
 
 def _build_real_platform():

@@ -115,6 +115,31 @@ def test_analysis_property_wraps_result_for_api_contract():
     }
 
 
+class _FakeMetric:
+    """Stands in for the evaluator's Metric object (attribute-based -> serialized via __dict__)."""
+
+    def __init__(self, metric_name, metric_value):
+        self.metric_name = metric_name
+        self.metric_value = metric_value
+
+
+def test_analysis_property_serializes_metric_objects():
+    metrics = [
+        _FakeMetric("Coverage", {"score": 0.78, "highlighted_text": "<span>...</span>"}),
+        _FakeMetric("Creativity", {"score": 0.42, "scores": [0.35, 0.50], "highlighted_text": [[]]}),
+    ]
+
+    prop = CoverageAnalysisService().analysis_property(metrics)
+
+    assert prop == {
+        "propertyName": "analysis",
+        "propertyValue": [
+            {"metric_name": "Coverage", "metric_value": {"score": 0.78, "highlighted_text": "<span>...</span>"}},
+            {"metric_name": "Creativity", "metric_value": {"score": 0.42, "scores": [0.35, 0.50], "highlighted_text": [[]]}},
+        ],
+    }
+
+
 def test_failed_themes_are_not_scored():
     service = CoverageAnalysisService()
 
