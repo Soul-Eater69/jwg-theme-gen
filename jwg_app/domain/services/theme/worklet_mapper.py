@@ -13,7 +13,7 @@ from typing import Any
 
 from worklet_data_api import Worklet
 
-from jwg_app.domain.models.base import Property, RecordState, WorkletType
+from jwg_app.domain.models.base import Property
 from jwg_app.domain.models.theme_generation import (
     ValueStreamCatalogue,
     ERContext,
@@ -143,10 +143,14 @@ def to_theme_worklet(
     l2: Sequence[L2Capability],
 ) -> Worklet:
     """
-    Build the unsaved THEME worklet returned to the API layer for persistence.
+    Append the generated theme content onto the value-stream worklet and return it.
+
+    The worklet's existing properties are preserved; the generated properties below are added (or
+    overwritten if already present, e.g. on a re-run). The worklet is edited in place - the API layer
+    persists the same worklet.
 
     Args:
-        vs_worklet: The parent value-stream worklet.
+        vs_worklet: The value-stream worklet to enrich (edited in place).
         title: The Theme title.
         description: The Theme description.
         business_needs: The Business Needs text.
@@ -155,16 +159,8 @@ def to_theme_worklet(
         l2: The derived L2 capabilities.
 
     Returns:
-        The unsaved THEME worklet.
+        The same value-stream worklet, with the generated theme properties appended.
     """
-    theme = Worklet(
-        id=None,
-        worklet_type=WorkletType.THEME,
-        parent_worklet_id=vs_worklet.id,
-        source_id=None,
-        state=RecordState.CREATED,
-    )
-
     # CamelModel forces by_alias on model_dump, so the property values serialize camelCase.
     properties = {
         ThemeProps.TITLE: title,
@@ -177,9 +173,9 @@ def to_theme_worklet(
     }
 
     for name, value in properties.items():
-        set_property(theme, name, value)
+        set_property(vs_worklet, name, value)
 
-    return theme
+    return vs_worklet
 
 
 def _worklet_identity(worklet: Worklet) -> str:

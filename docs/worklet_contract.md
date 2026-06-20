@@ -63,20 +63,13 @@ service (`ThemeService` / `ValueStreamCatalogue`).
 
 ---
 
-## 3. THEME worklet — output
+## 3. Output — the enriched VS worklets
 
-Built by `to_theme_worklet`, one per approved value stream. Returned unsaved; the caller persists it.
+`to_theme_worklet` **edits the incoming VS worklet in place**: it appends the generated properties to
+the worklet's existing properties (overwriting them on a re-run) and returns the same worklet. The
+worklet's identity and type are unchanged - there is no new worklet; the caller persists the same one.
 
-**Envelope**
-
-| Attribute | Value |
-| --- | --- |
-| `worklet_type` | `WorkletType.THEME` |
-| `parent_worklet_id` | the VS worklet's `id` |
-| `state` | `RecordState.CREATED` |
-| `id` / `source_id` | `None` (assigned on persist) |
-
-**Properties** (set via `set_property`)
+**Appended properties** (set via `set_property` - update-or-append)
 
 | Property name | Content |
 | --- | --- |

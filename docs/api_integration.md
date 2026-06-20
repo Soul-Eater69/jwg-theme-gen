@@ -24,7 +24,7 @@ ThemeGenerationHandler(
 async def run(
     er_worklet:  Worklet,          # the Engagement Request worklet
     vs_worklets: list[Worklet],    # ALL approved Value Stream worklets (themes generated together)
-) -> list[Worklet]                 # one unsaved THEME worklet per value stream
+) -> list[Worklet]                 # the same VS worklets, each enriched with theme properties
 ```
 
 ### How to construct it (dependency injection)
@@ -74,10 +74,13 @@ That's all generation reads from the ER. Summary-derived fields are **not** used
 **Only the id.** Name, description, value proposition, trigger, stages, and capabilities all come
 from SQL (the catalogue), keyed by that id. Any other properties on the VS worklets are ignored.
 
-### 2.3 THEME worklet — output (one per value stream)
+### 2.3 Output — the enriched VS worklets (one per value stream)
 
-Envelope: `worklet_type = THEME`, `parent_worklet_id = <vs worklet id>`, `state = CREATED`,
-`id`/`source_id = None` (assigned on persist).
+`run` returns the **same VS worklets it was given**, each with the generated theme properties
+**appended** (the worklet is edited in place; its existing properties are preserved, identity/type
+unchanged). On a re-run the generated properties are overwritten, not duplicated.
+
+Appended properties:
 
 | Property name | Value |
 | --- | --- |
@@ -160,6 +163,10 @@ def analysis_property(result: list) -> dict   # -> the worklet "analysis" proper
 straight into the API JSON. Requires the `text_evaluation.ngram_evaluation.NgramEvaluator` package and
 NLTK `stopwords`/`punkt` data on the path.
 
+Like theme generation, this is an **append/upsert**: the caller adds (or overwrites) the single
+`analysis` property on the **ER** worklet's existing properties - it does not replace the ER's other
+properties.
+
 ---
 
 ## 6. Types reference
@@ -209,7 +216,7 @@ to generation; the API team does not build it (the `ThemeService` does). It hold
 # theme generation (per ANALYSE/GENERATE request)
 catalogue = await get_theme_service(session)                     # ThemeCatalogueReader
 handler = ThemeGenerationHandler(catalogue, platform_client, USER_CONFIG_PATH)
-themes = await handler.run(er_worklet, vs_worklets)              # list[Worklet]; raises on failure
+themes = await handler.run(er_worklet, vs_worklets)              # the same VS worklets, enriched; raises on failure
 # persist `themes`
 
 # coverage (after generation, on the ER)
