@@ -165,6 +165,16 @@ def test_catalogue_failure_raises_503():
     assert exc.value.status_code == 503
 
 
+def test_vs_with_no_stages_is_flagged_400_others_succeed():
+    # vs1 has stages, vs2 has none -> vs1 complete, vs2 flagged 400 (per-VS, not a global abort)
+    handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), FakePlatform(), CONFIG_PATH)
+    themes = asyncio.run(handler.run(_er(), [_vs("vs1"), _vs("vs2")]))
+    assert len(themes) == 2
+    by_status = {mapper.get_property(t, mapper.ThemeProps.GENERATION_STATUS): t for t in themes}
+    assert set(by_status) == {"complete", "failed"}
+    assert "400" in mapper.get_property(by_status["failed"], mapper.ThemeProps.GENERATION_ERROR, "")
+
+
 def test_non_retryable_llm_failure_raises_503():
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), FailingPlatform(), CONFIG_PATH)
     with pytest.raises(CustomException) as exc:
