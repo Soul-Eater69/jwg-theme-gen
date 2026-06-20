@@ -87,6 +87,8 @@ class ThemeService:
             logger.info(f"Catalogue: {len(missing)} value stream(s) not found/inactive: {missing}")
         attributes_by_vs = {
             r.value_stream_id: ValueStreamAttributes(
+                name=r.value_stream_name or "",
+                description=r.value_stream_description or "",
                 value_proposition=r.value_stream_value_proposition or "",
                 trigger=r.value_stream_trigger or "",
             )

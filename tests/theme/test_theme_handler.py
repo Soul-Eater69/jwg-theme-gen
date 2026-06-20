@@ -44,11 +44,8 @@ def _er():
 
 
 def _vs(vs_id):
-    return _Worklet(
-        source_id=vs_id,
-        id=f"w-{vs_id}",
-        properties=[_Prop("title", f"VS {vs_id}"), _Prop("valueStreamDescription", "d")],
-    )
+    # The worklet supplies only the id; name/description come from the catalogue.
+    return _Worklet(source_id=vs_id, id=f"w-{vs_id}", properties=[])
 
 
 class FakeCatalogue:
@@ -133,7 +130,7 @@ def _catalogue_with_stages(*vs_ids):
     data = {}
     for vid in vs_ids:
         data[vid] = ValueStreamCatalogue(
-            value_stream=ValueStreamAttributes(value_proposition="vp", trigger="tr"),
+            value_stream=ValueStreamAttributes(name=f"VS {vid}", description="d", value_proposition="vp", trigger="tr"),
             stage_list=[ValueStage(stage_id=f"{vid}-st1", stage_name="S1")],
             l3_capabilities=[
                 L3Capability(id=f"{vid}-c1", name="C1", stage_id=f"{vid}-st1", level_two_id="L2", level_two_name="L2N")

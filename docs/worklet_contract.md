@@ -29,21 +29,20 @@ retrieval artifact.
 
 ## 2. Value Stream (VS) worklet — input
 
-Read by `to_vs_context`, combined with the SQL catalogue enrichment. **By contract, the VS worklet
-carries the id, name, and description**; the catalogue supplies value proposition, trigger, stages,
-and capabilities.
+Read by `to_vs_context`. **The worklet supplies only the value-stream id**; every other attribute
+comes from the governed SQL catalogue (the single source of truth), keyed by that id.
 
 | Domain field (`VSContext`) | Source | Property / catalogue field |
 | --- | --- | --- |
 | `vs_id` | **worklet** identity | `source_id` (fallback `id`) — the VSR id used to look up the catalogue |
-| `vs_name` | **worklet** property | `title` |
-| `vs_description` | **worklet** property | `valueStreamDescription` |
+| `vs_name` | **SQL catalogue** | `value_stream_name` |
+| `vs_description` | **SQL catalogue** | `value_stream_description` |
 | `value_proposition` | **SQL catalogue** | `value_stream_value_proposition` |
 | `trigger` | **SQL catalogue** | `value_stream_trigger` |
 
-So the only field strictly required for correctness is **`vs_id`** (the catalogue join key); `vs_name`
-and `vs_description` are contractually provided on the worklet. Everything else for the value stream
-(stages, L3/L2 capabilities) comes from SQL — see [sql_catalogue.md] / the catalogue service.
+So the VS worklet only needs to carry the **`vs_id`** (the catalogue join key). Name, description,
+value proposition, trigger, stages, and L3/L2 capabilities all come from SQL — see the catalogue
+service (`ThemeService` / `ValueStreamCatalogue`).
 
 ### VS fields used per prompt
 

@@ -77,8 +77,12 @@ class FakeCatalogueReader:
     async def fetch_theme_inputs(self, vs_ids: Sequence[str]) -> Dict[str, ValueStreamCatalogue]:
         out: Dict[str, ValueStreamCatalogue] = {}
         for vs_id in vs_ids:
+            name = next((n for v, n, _ in VALUE_STREAMS if v == vs_id), vs_id)
+            description = next((d for v, _, d in VALUE_STREAMS if v == vs_id), "")
             out[vs_id] = ValueStreamCatalogue(
                 value_stream=ValueStreamAttributes(
+                    name=name,
+                    description=description,
                     value_proposition="Faster, compliant procurement of physical assets.",
                     trigger="A business unit raises a need for a new physical asset.",
                 ),
@@ -200,16 +204,8 @@ def build_er_worklet(raw_text: str) -> Worklet:
 
 
 def build_vs_worklets() -> List[Worklet]:
-    return [
-        Worklet(
-            source_id=vs_id,
-            properties=[
-                _prop("title", name),
-                _prop("valueStreamDescription", description),
-            ],
-        )
-        for vs_id, name, description in VALUE_STREAMS
-    ]
+    # The worklet supplies only the id; name/description come from the catalogue.
+    return [Worklet(source_id=vs_id, properties=[]) for vs_id, _, _ in VALUE_STREAMS]
 
 
 # --- run -----------------------------------------------------------------------------------

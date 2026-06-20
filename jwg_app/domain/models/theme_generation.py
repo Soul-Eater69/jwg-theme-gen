@@ -74,8 +74,11 @@ class L2Capability(CamelModel):
 
 
 class ValueStreamAttributes(BaseModel):
-    """A Value Stream's own catalogue attributes (enrich generation)."""
+    """A Value Stream's own catalogue attributes. The worklet supplies only the id; name,
+    description, value proposition, and trigger all come from the governed catalogue."""
 
+    name: str = ""
+    description: str = ""
     value_proposition: str = ""
     trigger: str = ""
 

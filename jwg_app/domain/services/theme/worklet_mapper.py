@@ -65,9 +65,6 @@ class ERProps:
     RAW_TEXT = "rawText"
 
 
-class VSProps:
-    TITLE = "title"
-    DESCRIPTION = "valueStreamDescription"
 
 
 class ThemeProps:
@@ -121,10 +118,11 @@ def to_er_context(er_worklet: Worklet) -> ERContext:
 
 def to_vs_context(vs_worklet: Worklet, catalogue: ValueStreamCatalogue) -> VSContext:
     """
-    Combine value-stream worklet fields with the catalogue enrichment.
+    Build the value-stream context. The worklet supplies only the id; all other attributes
+    (name, description, value proposition, trigger) come from the governed catalogue.
 
     Args:
-        vs_worklet: The value-stream worklet.
+        vs_worklet: The value-stream worklet (read for its id only).
         catalogue: The catalogue record for this value stream.
 
     Returns:
@@ -132,10 +130,11 @@ def to_vs_context(vs_worklet: Worklet, catalogue: ValueStreamCatalogue) -> VSCon
     """
     vs = catalogue.value_stream
 
+    # The worklet supplies only the id; name/description/proposition/trigger come from the catalogue.
     return VSContext(
         vs_id=value_stream_id(vs_worklet),
-        vs_name=get_property(vs_worklet, VSProps.TITLE, ""),
-        vs_description=get_property(vs_worklet, VSProps.DESCRIPTION, ""),
+        vs_name=vs.name,
+        vs_description=vs.description,
         value_proposition=vs.value_proposition,
         trigger=vs.trigger,
     )

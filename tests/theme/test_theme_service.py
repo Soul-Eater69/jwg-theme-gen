@@ -83,6 +83,8 @@ def _l2(l2_id, name="L2 Name"):
 def test_assembles_full_chain():
     vs = ValueStreamModel(
         value_stream_id="vs1",
+        value_stream_name="Procurement",
+        value_stream_description="VS desc",
         value_stream_value_proposition="VP",
         value_stream_trigger="TR",
         value_stream_active="yes",
@@ -96,6 +98,8 @@ def test_assembles_full_chain():
     )
     cat = asyncio.run(service.fetch_theme_inputs(["vs1"]))["vs1"]
 
+    assert cat.value_stream.name == "Procurement"
+    assert cat.value_stream.description == "VS desc"
     assert cat.value_stream.value_proposition == "VP"
     assert cat.value_stream.trigger == "TR"
     assert [s.stage_id for s in cat.stage_list] == ["st1"]
