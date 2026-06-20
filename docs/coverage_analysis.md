@@ -24,7 +24,7 @@ Both are reported as scores plus highlight spans: covered source text is highlig
 | Arg | Meaning |
 | --- | --- |
 | `raw_text` | the original raw ticket text (description + extracted attachments) — the grounding source |
-| `themes` | the list of generated Theme worklets (`run()`'s output); **failed worklets are skipped** |
+| `themes` | the list of generated Theme worklets (`run()`'s output) |
 | `n` | n-gram size (1 = unigram recall) |
 | `remove_stopwords` | drop stopwords before matching, so overlap reflects content words |
 | `coverage_color` / `creativity_color` | highlight colors (enums or strings) |
@@ -34,15 +34,15 @@ Both are reported as scores plus highlight spans: covered source text is highlig
 The evaluator's contract expects a context field named `acceptanceCriteria` and generated entities
 with `title` / `description` properties. Themes don't have those exact fields, so the service maps:
 
-| Evaluator slot | Fed with | Note |
-| --- | --- | --- |
-| `acceptanceCriteria` (context) | the raw ticket text | the source to cover |
-| `title` (generated) | the Theme **description** | slot name only — it holds the description |
-| `description` (generated) | the Theme **Business Needs** | slot name only — it holds business needs |
+| Evaluator slot | Fed with |
+| --- | --- |
+| `acceptanceCriteria` (context) | the raw ticket text — the source to cover |
+| `title` (generated) | the Theme **Business Needs** |
+| `description` (generated) | the Theme **description** |
 
-So `title` / `description` here are **evaluator slot names, not semantic fields** — both Theme text
-outputs (description + business needs) are scored against the raw text. (Stages and capabilities are
-catalogue ids, not free text, so they are not coverage-scored.)
+`title` / `description` are **evaluator slot names, not semantic fields** — both Theme text outputs
+(business needs + description) are scored against the raw text. (Stages and capabilities are catalogue
+ids, not free text, so they are not coverage-scored.)
 
 ## Dataset shape
 
@@ -53,8 +53,8 @@ catalogue ids, not free text, so they are not coverage-scored.)
   "context": [ { "propertyName": "acceptanceCriteria", "propertyValue": "<raw ticket text>" } ],
   "generated_text": [
     [
-      { "propertyName": "title",       "propertyValue": "<theme description>" },
-      { "propertyName": "description", "propertyValue": "<theme business needs>" }
+      { "propertyName": "title",       "propertyValue": "<theme business needs>" },
+      { "propertyName": "description", "propertyValue": "<theme description>" }
     ]
   ],
   "n": 1,
@@ -98,8 +98,6 @@ property on the **ER** worklet (the analysis scores how well the generated theme
 
 ## Behaviour notes
 
-- **Failed themes are excluded.** A worklet with `generationStatus="failed"` carries no generated
-  text, so it is filtered out of `generated_text` and not scored.
 - **The evaluator is a prod dependency.** If `text_evaluation.ngram_evaluation` is not importable,
   `analyze` raises `RuntimeError`; `build_dataset` still works (no evaluator needed), so callers can
   inspect what *would* be scored.

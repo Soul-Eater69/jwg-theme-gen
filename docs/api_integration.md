@@ -166,7 +166,7 @@ def analysis_property(result: list) -> dict   # -> the worklet "analysis" proper
 
 `Metric` objects are serialized to plain dicts automatically (`_to_jsonable`), so the property drops
 straight into the API JSON. Requires the `text_evaluation.ngram_evaluation.NgramEvaluator` package and
-NLTK `stopwords`/`punkt` data on the path. Failed themes are skipped.
+NLTK `stopwords`/`punkt` data on the path.
 
 ---
 

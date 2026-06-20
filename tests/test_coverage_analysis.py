@@ -28,18 +28,6 @@ def _theme(description, business_needs):
         [
             _Prop(CoverageAnalysisService.THEME_DESCRIPTION_PROPERTY, description),
             _Prop(CoverageAnalysisService.THEME_BUSINESS_NEEDS_PROPERTY, business_needs),
-            _Prop(CoverageAnalysisService.THEME_GENERATION_STATUS_PROPERTY, "complete"),
-        ]
-    )
-
-
-def _failed_theme():
-    return _Worklet(
-        [
-            _Prop(
-                CoverageAnalysisService.THEME_GENERATION_STATUS_PROPERTY,
-                CoverageAnalysisService.FAILED_STATUS,
-            )
         ]
     )
 
@@ -55,10 +43,11 @@ def test_build_dataset_uses_existing_evaluator_property_names():
     assert dataset["context"] == [
         {"propertyValue": "raw ticket", "propertyName": "acceptanceCriteria"}
     ]
+    # title <- business needs, description <- the theme description
     assert dataset["generated_text"] == [
         [
-            {"propertyValue": "theme description", "propertyName": "title"},
-            {"propertyValue": "theme business needs", "propertyName": "description"},
+            {"propertyValue": "theme business needs", "propertyName": "title"},
+            {"propertyValue": "theme description", "propertyName": "description"},
         ]
     ]
     assert dataset["n"] == 1
@@ -96,12 +85,12 @@ def test_build_dataset_uses_all_generated_themes_in_one_call():
 
     assert dataset["generated_text"] == [
         [
-            {"propertyValue": "desc 1", "propertyName": "title"},
-            {"propertyValue": "needs 1", "propertyName": "description"},
+            {"propertyValue": "needs 1", "propertyName": "title"},
+            {"propertyValue": "desc 1", "propertyName": "description"},
         ],
         [
-            {"propertyValue": "desc 2", "propertyName": "title"},
-            {"propertyValue": "needs 2", "propertyName": "description"},
+            {"propertyValue": "needs 2", "propertyName": "title"},
+            {"propertyValue": "desc 2", "propertyName": "description"},
         ],
     ]
 
@@ -140,9 +129,3 @@ def test_analysis_property_serializes_metric_objects():
     }
 
 
-def test_failed_themes_are_not_scored():
-    service = CoverageAnalysisService()
-
-    dataset = service.build_dataset(raw_text="raw", themes=[_failed_theme()])
-
-    assert dataset["generated_text"] == []

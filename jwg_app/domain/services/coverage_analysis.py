@@ -43,11 +43,10 @@ class CoverageAnalysisService:
 
     ANALYSIS_PROPERTY = "analysis"
 
-    # These names match ``theme.worklet_mapper.ThemeProps`` without importing the generator stack.
+    # Theme property names read off the generated worklet (match ``theme.worklet_mapper.ThemeProps``
+    # without importing the generator stack).
     THEME_DESCRIPTION_PROPERTY = "description"
     THEME_BUSINESS_NEEDS_PROPERTY = "Business Needs"
-    THEME_GENERATION_STATUS_PROPERTY = "generationStatus"
-    FAILED_STATUS = "failed"
 
     CONTEXT_PROPERTY = "acceptanceCriteria"
     GENERATED_TITLE_PROPERTY = "title"
@@ -122,11 +121,7 @@ class CoverageAnalysisService:
             "context": [
                 AnalysisProperty(self.CONTEXT_PROPERTY, raw_text).to_evaluator_property()
             ],
-            "generated_text": [
-                self._generated_theme_properties(theme)
-                for theme in themes
-                if not self._is_failed_theme(theme)
-            ],
+            "generated_text": [self._generated_theme_properties(theme) for theme in themes],
             "n": n,
             "remove_stopwords": remove_stopwords,
             "coverage_color": _enum_value(coverage_color),
@@ -134,19 +129,17 @@ class CoverageAnalysisService:
         }
 
     def _generated_theme_properties(self, theme: Worklet) -> list[dict[str, str]]:
+        # title <- Business Needs, description <- the Theme description.
         description = _get_property(theme, self.THEME_DESCRIPTION_PROPERTY, "") or ""
         business_needs = _get_property(theme, self.THEME_BUSINESS_NEEDS_PROPERTY, "") or ""
         return [
             AnalysisProperty(
-                self.GENERATED_TITLE_PROPERTY, str(description)
+                self.GENERATED_TITLE_PROPERTY, str(business_needs)
             ).to_evaluator_property(),
             AnalysisProperty(
-                self.GENERATED_DESCRIPTION_PROPERTY, str(business_needs)
+                self.GENERATED_DESCRIPTION_PROPERTY, str(description)
             ).to_evaluator_property(),
         ]
-
-    def _is_failed_theme(self, theme: Worklet) -> bool:
-        return _get_property(theme, self.THEME_GENERATION_STATUS_PROPERTY) == self.FAILED_STATUS
 
     def _get_evaluator(self) -> CoverageEvaluator:
         if self._evaluator is None:
