@@ -109,6 +109,7 @@ class ThemeGenerationHandler:
                 400 if - unexpectedly - the value stream resolved no stages).
         """
         if er_worklet is None or not vs_worklets:
+            logger.error("theme generation aborted (404): ER worklet or VS worklet not found")
             raise CustomException(
                 status_code=404, detail="ER worklet or VS worklet not found"
             )
@@ -120,6 +121,7 @@ class ThemeGenerationHandler:
         except CustomException:
             raise
         except Exception as exc:
+            logger.error("theme generation aborted (503): Azure SQL unavailable: %s", exc)
             raise CustomException(
                 status_code=503, detail="Azure SQL service unavailable"
             ) from exc
@@ -199,7 +201,10 @@ class ThemeGenerationHandler:
                 l2=resolver.derive_l2(l3),
             )
         except CustomException as exc:
-            logger.error("theme generation failed for value stream %s: %s", vs.vs_id, exc.detail)
+            logger.error(
+                "theme generation failed for value stream %s (%s): %s",
+                vs.vs_id, exc.status_code, exc.detail,
+            )
             return mapper.to_failed_theme_worklet(vs_worklet, status_code=exc.status_code, error=exc.detail)
 
     async def _description_body(self, er: ERContext) -> str:

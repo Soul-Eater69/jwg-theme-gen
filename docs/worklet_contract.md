@@ -121,6 +121,22 @@ tiers:
 Transient LLM failures (429 / 5xx / timeout) are retried per the theme retry config before either
 tier treats the call as failed.
 
+### Error reference
+
+Every error is logged before it surfaces (`logger.error` in the handler), so an aborted request or a
+failed value stream is traceable in the logs as well as the response.
+
+| Status | Condition | Tier | Surfaced as |
+| --- | --- | --- | --- |
+| `404` | ER worklet or VS worklet not found | core | raised `CustomException` (aborts) |
+| `503` | Azure SQL service unavailable | core | raised `CustomException` (aborts) |
+| `503` | LLM service unavailable (description body/framing, stage selection, or capabilities) after retries | core | raised `CustomException` (aborts) |
+| `503` | LLM service unavailable (business needs) after retries | per-VS | failed worklet (`generationStatus="failed"`, `generationError`) |
+| `400` | No valid stages resolved for this value stream (defensive; not expected) | per-VS | failed worklet (`generationStatus="failed"`, `generationError`) |
+
+Retryable (before the above): `429`, `502`, `503`, `504`. Not retried (fail fast): `400`, `401`,
+`403`, `404`, `500` (the gateway folds real bugs into `500`).
+
 ---
 
 ## Notes / assumptions
