@@ -18,16 +18,29 @@ helper calls to your actual wiring.)
    incoming VS worklet and returns it (edited in place, existing properties preserved). Persist each.
 4. **ER audit trail** adds **all** vs_ids to `selected_VS_ids`.
 
-## New imports
+## DI wiring (matches the prod `get_value_stream_service` pattern)
+
+`ThemeService` is **injected** into `GeneratorService` via DI - not built inline. The provider chain
+is `get_db_session -> repositories -> ThemeService`, exactly like value streams. `get_theme_service`
+already exists (`interface/dependencies/theme.py`); add it to the generator's provider:
+
+```python
+# interface/dependencies/generator.py
+from jwg_app.interface.dependencies.theme import get_theme_service
+
+async def get_generator_service(
+    ...,
+    theme_service: ThemeService = Depends(get_theme_service),
+) -> GeneratorService:
+    return GeneratorService(..., theme_service=theme_service)
+```
+
+Then `_generate_theme_package` uses `self.theme_service` (no repos/session imports in the service).
+
+## New import
 
 ```python
 from jwg_app.domain.services.theme_generation_handler import ThemeGenerationHandler
-from jwg_app.domain.services.theme_service import ThemeService
-from jwg_app.infrastructure.repositories.value_stream_repository import ValueStreamRepository
-from jwg_app.infrastructure.repositories.value_stream_stage_repository import ValueStreamStageRepository
-from jwg_app.infrastructure.repositories.value_stream_capability_repository import ValueStreamCapabilityRepository
-from jwg_app.infrastructure.repositories.l3_capability_repository import L3CapabilityRepository
-from jwg_app.infrastructure.repositories.l2_capability_repository import L2CapabilityRepository
 ```
 
 ## Updated method
@@ -96,16 +109,9 @@ async def _generate_theme_package(
             )
         vs_worklets.append(vs_worklet)
 
-    # Step 3 - build the SQL catalogue reader (ThemeService) and run generation (list in, list out)
-    theme_service = ThemeService(
-        value_stream_repository=ValueStreamRepository(session=self.session),
-        stage_repository=ValueStreamStageRepository(session=self.session),
-        capability_repository=ValueStreamCapabilityRepository(session=self.session),
-        l3_repository=L3CapabilityRepository(session=self.session),
-        l2_repository=L2CapabilityRepository(session=self.session),
-    )
+    # Step 3 - run generation; the catalogue reader (ThemeService) is injected via DI
     handler = ThemeGenerationHandler(
-        azure_sql_client=theme_service,
+        azure_sql_client=self.theme_service,            # injected, the missing dependency
         platform_client=self.platform_client,
         user_config_path="configs/user_config.yaml",
     )

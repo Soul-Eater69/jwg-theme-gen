@@ -9,10 +9,25 @@ logger) are the existing prod methods/attributes.
 
 What changed vs the previous _generate_theme_package:
   1. Inject ThemeService as azure_sql_client (the handler reads VS attributes/stages/capabilities
-     from Azure SQL; the constructor now requires it).
+     from Azure SQL; the constructor now requires it). ThemeService is injected into GeneratorService
+     via DI - see get_generator_service note below - matching the get_value_stream_service pattern.
   2. Multi-VS: collect ALL VS ids from the theme stubs, fetch all VS worklets, run(list) -> list.
   3. Persist each enriched worklet (to_theme_worklet edits the VS worklet in place).
   4. Add all vs_ids to the ER selected_VS_ids audit trail.
+
+DI wiring (interface/dependencies/generator.py), matching the prod chain
+(get_db_session -> repository -> service -> Depends in the endpoint):
+
+    from jwg_app.interface.dependencies.theme import get_theme_service
+
+    async def get_generator_service(
+        ...,
+        theme_service: ThemeService = Depends(get_theme_service),
+    ) -> GeneratorService:
+        return GeneratorService(..., theme_service=theme_service)
+
+``get_theme_service`` already exists (interface/dependencies/theme.py): it wires the five
+repositories to the request's AsyncSession - the same shape as get_value_stream_service.
 """
 
 from http import HTTPStatus
@@ -23,20 +38,14 @@ from worklet_data_api import User, Worklet, WorkletType  # prod package
 from jwg_app.domain.exceptions.custom_exception import CustomException
 from jwg_app.domain.models.base import ValueStreamAction
 from jwg_app.domain.services.theme_generation_handler import ThemeGenerationHandler
-from jwg_app.domain.services.theme_service import ThemeService
-from jwg_app.infrastructure.repositories.l2_capability_repository import L2CapabilityRepository
-from jwg_app.infrastructure.repositories.l3_capability_repository import L3CapabilityRepository
-from jwg_app.infrastructure.repositories.value_stream_capability_repository import (
-    ValueStreamCapabilityRepository,
-)
-from jwg_app.infrastructure.repositories.value_stream_repository import ValueStreamRepository
-from jwg_app.infrastructure.repositories.value_stream_stage_repository import (
-    ValueStreamStageRepository,
-)
 
 
 class GeneratorService:
-    """Partial reference — theme-generation methods only."""
+    """Partial reference — theme-generation methods only.
+
+    Assumes ``self.theme_service`` (a ThemeService) is injected via the GeneratorService DI provider,
+    alongside the existing ``self.platform_client`` / ``self.session`` / helpers.
+    """
 
     async def handle_value_stream_action(
         self,
@@ -147,16 +156,10 @@ class GeneratorService:
                 )
             vs_worklets.append(vs_worklet)
 
-        # Step 3 - build the SQL catalogue reader (ThemeService) and run generation (list -> list).
-        theme_service = ThemeService(
-            value_stream_repository=ValueStreamRepository(session=self.session),
-            stage_repository=ValueStreamStageRepository(session=self.session),
-            capability_repository=ValueStreamCapabilityRepository(session=self.session),
-            l3_repository=L3CapabilityRepository(session=self.session),
-            l2_repository=L2CapabilityRepository(session=self.session),
-        )
+        # Step 3 - run generation. The catalogue reader (ThemeService) is injected via DI; the
+        # handler reads VS attributes/stages/capabilities from Azure SQL through it (list -> list).
         handler = ThemeGenerationHandler(
-            azure_sql_client=theme_service,
+            azure_sql_client=self.theme_service,
             platform_client=self.platform_client,
             user_config_path="configs/user_config.yaml",
         )
