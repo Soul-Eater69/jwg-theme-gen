@@ -80,9 +80,7 @@ class ThemeGenerationHandler:
         self._azure_sql = azure_sql_client
         self._platform = platform_client
         config = load_config(user_config_path)
-        # the theme_generation usecase: { prompt: {key: {system_role, static_prompt}}, model_params }
         self._usecase = config["theme_generation"]
-        # LLM retry policy (transient gateway failures); the dataclass holds the defaults.
         self._retry = ThemeGenerationConfig().retry
 
     async def run(self, er_worklet: Worklet, vs_worklets: list[Worklet]) -> list[Worklet]:
@@ -183,7 +181,6 @@ class ThemeGenerationHandler:
         """
         stages = stages_by_vs.get(vs.vs_id, [])
         if not stages:
-            # Defensive: an approved value stream is expected to have governed stages.
             raise CustomException(
                 status_code=400, detail="No valid stages resolved for this Value Stream"
             )

@@ -70,14 +70,15 @@ class CoverageAnalysisService:
 
         Args:
             raw_text: The original raw ticket text.
-            themes: Generated Theme worklets. Failed-generation markers are ignored.
+            themes: Generated Theme worklets.
             n: N-gram size used by the evaluator.
             remove_stopwords: Whether evaluator stopword filtering is enabled.
             coverage_color: Highlight color for covered source text.
             creativity_color: Highlight color for generated text not grounded in the source.
 
         Returns:
-            The evaluator's coverage/creativity result list.
+            The coverage/creativity metrics as JSON-serializable dicts (the evaluator returns Metric
+            objects; they are converted here so the result can be returned/serialized directly).
         """
         dataset = self.build_dataset(
             raw_text=raw_text,
@@ -87,7 +88,8 @@ class CoverageAnalysisService:
             coverage_color=coverage_color,
             creativity_color=creativity_color,
         )
-        return self._get_evaluator().evaluate(dataset)
+        result = self._get_evaluator().evaluate(dataset)
+        return [_to_jsonable(metric) for metric in result]
 
     def analysis_property(self, analysis: list[Any]) -> dict[str, Any]:
         """Wrap evaluator output in the ``analysis`` worklet property from the API contract.

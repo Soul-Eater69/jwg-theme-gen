@@ -138,7 +138,7 @@ def analyze(
     remove_stopwords: bool = True,
     coverage_color: Any = "green",
     creativity_color: Any = "orange",
-) -> list                                  # one entry per metric (Coverage, Creativity)
+) -> list[dict]                            # one JSON dict per metric (Coverage, Creativity) - already serialized
 
 def analysis_property(result: list) -> dict   # -> the worklet "analysis" property (JSON-safe)
 ```

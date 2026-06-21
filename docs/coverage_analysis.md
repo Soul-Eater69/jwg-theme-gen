@@ -64,9 +64,11 @@ ids, not free text, so they are not coverage-scored.)
 }
 ```
 
-`analyze(...)` builds this and calls `evaluator.evaluate(dataset)`; the result is one entry per
-metric (Coverage, Creativity) as `Metric` objects. `analysis_property(result)` serializes those to
-JSON-safe dicts and wraps them as the `analysis` worklet property the API returns on the ER:
+`analyze(...)` builds this, runs the evaluator, and returns one entry per metric (Coverage,
+Creativity) **already converted to JSON-safe dicts** - the evaluator hands back `Metric` objects,
+which `analyze` serializes (`_to_jsonable`) so the result can be returned/serialized directly.
+`analysis_property(result)` wraps those dicts as the `analysis` worklet property the API sets on the
+ER:
 
 ```json
 {
