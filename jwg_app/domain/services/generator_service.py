@@ -30,17 +30,19 @@ DI wiring (interface/dependencies/generator.py), matching the prod chain
 repositories to the request's AsyncSession - the same shape as get_value_stream_service.
 """
 
-from http import HTTPStatus
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from __future__ import annotations
 
-from worklet_data_api import User, Worklet, WorkletType  # prod package
+import logging
+from http import HTTPStatus
+from typing import List, Optional, Tuple
+
+from worklet_data_api import User, Worklet, WorkletDataAPI, WorkletType  # prod package
 
 from jwg_app.domain.exceptions.custom_exception import CustomException
+from jwg_app.domain.interfaces.platform_client import PlatformClient
 from jwg_app.domain.models.base import ValueStreamAction
 from jwg_app.domain.services.theme_generation_handler import ThemeGenerationHandler
-
-if TYPE_CHECKING:
-    from jwg_app.domain.services.theme_service import ThemeService
+from jwg_app.domain.services.theme_service import ThemeService
 
 
 class GeneratorService:
@@ -52,12 +54,26 @@ class GeneratorService:
 
     def __init__(
         self,
-        *,
-        theme_service: "ThemeService",   # NEW: the catalogue reader for theme generation
-        # ... existing GeneratorService dependencies (platform_client, worklet apis, logger, ...) ...
+        worklet_api: WorkletDataAPI,
+        worklet_api_er: WorkletDataAPI,
+        worklet_api_theme: WorkletDataAPI,
+        worklet_api_vs: WorkletDataAPI,
+        jira_client,            # JIRAClient (prod)
+        auth_info,              # AuthInfo (prod)
+        jira_field_provider,    # JIRAFieldProvider (prod)
+        platform_client: PlatformClient,
+        theme_service: ThemeService,   # NEW: the catalogue reader for theme generation
     ) -> None:
-        self.theme_service = theme_service
-        # ... store the existing dependencies as before ...
+        self.worklet_api = worklet_api
+        self.worklet_api_er = worklet_api_er
+        self.worklet_api_theme = worklet_api_theme
+        self.worklet_api_vs = worklet_api_vs
+        self.jira_client = jira_client
+        self.auth_info = auth_info
+        self.jira_field_provider = jira_field_provider
+        self.platform_client = platform_client
+        self.theme_service = theme_service   # NEW
+        self.logger = logging.getLogger(__name__)
 
     async def handle_value_stream_action(
         self,
