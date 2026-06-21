@@ -1,10 +1,13 @@
 """Manual smoke test for theme generation — FOR TESTING ONLY.
 
-Wires the ThemeGenerationHandler with a fake catalogue reader and (by default) a fake platform
-client, so the full generate-theme pipeline runs end to end with no DB and no LLM. Pass --real-llm to
-use the prod PlatformRestClient, configured from the app's existing settings in .env
-(CORE_PLATFORM_ENDPOINT / VERIFY_SSL / APP_ID) plus PLATFORM_AUTH_TOKEN (the bearer from
-`python -m scripts.print_token` in the teg repo).
+Runs the full ThemeGenerationHandler pipeline end to end against the real Azure SQL catalogue
+(ThemeService) and the real prod PlatformRestClient (LLM) — there are no fakes. The value streams are
+supplied as ids only (VALUE_STREAMS); every attribute (name, description, stages, capabilities) comes
+from SQL.
+
+Platform config is read from .env (CORE_PLATFORM_ENDPOINT / VERIFY_SSL / APP_ID) plus
+PLATFORM_AUTH_TOKEN (the bearer from `python -m scripts.print_token` in the teg repo). DB config is
+read from DB_* in .env (see db_session). Needs aioodbc + an ODBC driver for the DB.
 
 The ticket raw text fed to generation comes from scripts/theme_test/raw_text.txt (edit it to test a
 real ticket); --raw-text-file points elsewhere. --coverage scores the generated themes against the
@@ -12,9 +15,9 @@ raw text via CoverageAnalysisService.
 
 Run from the repo root:
     python scripts/theme_test/smoke_theme.py
-    python scripts/theme_test/smoke_theme.py --real-llm
-    python scripts/theme_test/smoke_theme.py --real-db --real-llm
-    python scripts/theme_test/smoke_theme.py --real-db --real-llm --coverage
+    python scripts/theme_test/smoke_theme.py --only stages
+    python scripts/theme_test/smoke_theme.py --coverage
+    python scripts/theme_test/smoke_theme.py --debug
 """
 
 from __future__ import annotations
@@ -35,17 +38,12 @@ import asyncio  # noqa: E402
 import json  # noqa: E402
 import logging  # noqa: E402
 from pathlib import Path  # noqa: E402
-from typing import Any, Dict, List, Optional, Sequence, Tuple  # noqa: E402
+from typing import Any, Dict, List, Optional, Tuple  # noqa: E402
 
 from worklet_data_api import Worklet  # noqa: E402  (stub)
 
 from jwg_app.domain.models.base import Property  # noqa: E402
-from jwg_app.domain.models.theme_generation import (  # noqa: E402
-    L3Capability,
-    ValueStage,
-    ValueStreamAttributes,
-    ValueStreamCatalogue,
-)
+from jwg_app.domain.models.theme_generation import ValueStreamCatalogue  # noqa: E402
 from jwg_app.domain.services.theme import output_resolver as resolver  # noqa: E402
 from jwg_app.domain.services.theme import worklet_mapper as mapper  # noqa: E402
 from jwg_app.domain.services.theme_generation_handler import (  # noqa: E402
@@ -61,68 +59,13 @@ DEFAULT_RAW_TEXT = (
     "and providers in the new fiscal year."
 )
 
-# Multiple approved value streams -> exercises the batched stage/capability calls, the per-VS
-# parallel business-needs, and the resolver's cross-VS reassignment. Use real VSR ids for --real-db.
-VALUE_STREAMS = [
-    ("VSR00074583", "Procurement Management", "Manage end-to-end procurement of physical assets."),
-    ("VSR00074584", "Claims Adjudication", "Adjudicate and price member and provider claims."),
-]
+# Approved value streams, by id only -> every attribute comes from SQL. Multiple ids exercise the
+# batched stage/capability calls, the per-VS parallel business-needs, and the resolver's cross-VS
+# reassignment.
+VALUE_STREAMS = ["VSR00074583", "VSR00074584"]
 
 
-# --- fakes ---------------------------------------------------------------------------------
-
-class FakeCatalogueReader:
-    """Returns a canned ValueStreamCatalogue per VS (no DB)."""
-
-    async def fetch_theme_inputs(self, vs_ids: Sequence[str]) -> Dict[str, ValueStreamCatalogue]:
-        out: Dict[str, ValueStreamCatalogue] = {}
-        for vs_id in vs_ids:
-            name = next((n for v, n, _ in VALUE_STREAMS if v == vs_id), vs_id)
-            description = next((d for v, _, d in VALUE_STREAMS if v == vs_id), "")
-            out[vs_id] = ValueStreamCatalogue(
-                value_stream=ValueStreamAttributes(
-                    name=name,
-                    description=description,
-                    value_proposition="Faster, compliant procurement of physical assets.",
-                    trigger="A business unit raises a need for a new physical asset.",
-                ),
-                stage_list=[
-                    ValueStage(
-                        stage_id="VSS00074676",
-                        stage_name="Physical Asset Order Management",
-                        stage_description="Place and manage orders for approved physical assets.",
-                        entrance_criteria="Approved asset request exists.",
-                        exit_criteria="Order placed with the vendor.",
-                    ),
-                    ValueStage(
-                        stage_id="VSS00074677",
-                        stage_name="Contract Negotiation Support",
-                        stage_description="Support negotiation of vendor contracts.",
-                        entrance_criteria="Shortlisted vendors identified.",
-                        exit_criteria="Contract terms agreed.",
-                    ),
-                ],
-                l3_capabilities=[
-                    L3Capability(
-                        id="CAP00000588",
-                        name="Physical Asset Order Management",
-                        description="Manage the lifecycle of a physical asset order.",
-                        stage_id="VSS00074676",
-                        level_two_id="CAP00000089",
-                        level_two_name="Physical Asset Acquisition",
-                    ),
-                    L3Capability(
-                        id="CAP00000629",
-                        name="Contract Negotiation Support",
-                        description="Support contract negotiation activities.",
-                        stage_id="VSS00074677",
-                        level_two_id="CAP00000086",
-                        level_two_name="Procurement Management",
-                    ),
-                ],
-            )
-        return out
-
+# --- platform debug wrapper ----------------------------------------------------------------
 
 class _DebugPlatform:
     """Wraps any platform client and prints each agenerate request + raw (data, error, status)."""
@@ -150,28 +93,6 @@ class _DebugPlatform:
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
-
-
-class FakePlatformClient:
-    """Returns canned structured output per schema, so the pipeline runs without an LLM."""
-
-    async def agenerate(
-        self,
-        message: List[Dict[str, str]],
-        model_params: Optional[Dict[str, Any]] = None,
-        output_function: Optional[type] = None,
-        **kwargs: Any,
-    ) -> Tuple[Optional[Any], Optional[str], int]:
-        name = output_function.__name__ if output_function else ""
-        if name == "TextOut":
-            return {"text": "[fake] Generated narrative text for testing."}, None, 200
-        if name == "FramingsOut":
-            return {"framings": []}, None, 200
-        if name == "BatchedStageSelection":
-            return {"value_streams": []}, None, 200  # empty -> resolver falls back to all stages
-        if name == "BatchedCapabilitySelection":
-            return {"stages": []}, None, 200
-        return {}, None, 200
 
 
 # --- worklet builders ----------------------------------------------------------------------
@@ -205,7 +126,7 @@ def build_er_worklet(raw_text: str) -> Worklet:
 
 def build_theme_stubs() -> List[Worklet]:
     # THEME stubs: the valueStreamId property carries the VS id (the catalogue lookup key).
-    return [Worklet(properties=[_prop("valueStreamId", vs_id)]) for vs_id, _, _ in VALUE_STREAMS]
+    return [Worklet(properties=[_prop("valueStreamId", vs_id)]) for vs_id in VALUE_STREAMS]
 
 
 # --- run -----------------------------------------------------------------------------------
@@ -330,15 +251,12 @@ async def main(args: argparse.Namespace) -> None:
             level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
         )
 
-    if args.real_llm:
-        platform = _build_real_platform()
-        print("# using REAL platform client (PlatformRestClient, config from .env)")
-    else:
-        platform = FakePlatformClient()
-        print("# using FAKE platform client (no LLM)")
+    from db_session import dispose, session_scope
 
+    platform = _build_real_platform()
     if args.debug:
         platform = _DebugPlatform(platform)
+    print("# platform: real PlatformRestClient (config from .env)")
 
     raw_text = _load_raw_text(args.raw_text_file)
     er_worklet, theme_stubs = build_er_worklet(raw_text), build_theme_stubs()
@@ -346,46 +264,21 @@ async def main(args: argparse.Namespace) -> None:
     print(f"# {len(theme_stubs)} value stream(s): {vs_ids} | only={args.only}")
 
     try:
-        catalogue = await _fetch_catalogue(args, vs_ids)
-        handler = ThemeGenerationHandler(_StaticCatalogue(catalogue), platform, CONFIG_PATH)
-        if args.only == "all":
-            themes = await handler.run(er_worklet, theme_stubs)
-            _print_themes(themes)
-            if args.coverage:
-                _run_coverage(er_worklet, raw_text, themes)
-        else:
-            await _run_only(handler, args.only, er_worklet, theme_stubs, catalogue)
+        async with session_scope() as session:
+            service = _build_real_service(session)
+            handler = ThemeGenerationHandler(service, platform, CONFIG_PATH)
+            if args.only == "all":
+                themes = await handler.run(er_worklet, theme_stubs)
+                _print_themes(themes)
+                if args.coverage:
+                    _run_coverage(er_worklet, raw_text, themes)
+            else:
+                catalogue = await service.fetch_theme_inputs(vs_ids)
+                await _run_only(handler, args.only, er_worklet, theme_stubs, catalogue)
     finally:
         if hasattr(platform, "aclose"):
             await platform.aclose()
-        if args.real_db:
-            try:
-                from db_session import dispose
-
-                await dispose()
-            except ImportError:
-                pass  # older db_session without dispose(); engine closes on process exit
-
-
-class _StaticCatalogue:
-    """Returns an already-fetched catalogue dict, so each generator can run without re-hitting the DB."""
-
-    def __init__(self, data):
-        self._data = data
-
-    async def fetch_theme_inputs(self, vs_ids):
-        return {i: self._data.get(i, ValueStreamCatalogue()) for i in vs_ids}
-
-
-async def _fetch_catalogue(args, vs_ids):
-    if args.real_db:
-        from db_session import session_scope
-
-        print("# fetching catalogue from Azure SQL (ThemeService)")
-        async with session_scope() as session:
-            return await _build_real_service(session).fetch_theme_inputs(vs_ids)
-    print("# using FAKE catalogue (no DB)")
-    return await FakeCatalogueReader().fetch_theme_inputs(vs_ids)
+        await dispose()
 
 
 async def _run_only(handler, only, er_worklet, theme_stubs, catalogue):
@@ -434,8 +327,6 @@ async def _run_only(handler, only, er_worklet, theme_stubs, catalogue):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--real-llm", action="store_true", help="use prod PlatformRestClient (needs PLATFORM_* env)")
-    parser.add_argument("--real-db", action="store_true", help="use real ThemeService over Azure SQL (needs env + aioodbc)")
     parser.add_argument("--debug", action="store_true", help="DEBUG logging + print each agenerate request/response")
     parser.add_argument(
         "--only",
