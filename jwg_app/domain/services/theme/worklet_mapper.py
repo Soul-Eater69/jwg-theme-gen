@@ -58,9 +58,8 @@ class ERProps:
     RAW_TEXT = "rawText"
 
 
-
-
 class ThemeProps:
+    VALUE_STREAM_ID = "valueStreamId"  # input: the business VS id (the SQL catalogue key)
     TITLE = "title"
     DESCRIPTION = "description"
     BUSINESS_NEEDS = "Business Needs"
@@ -72,15 +71,18 @@ class ThemeProps:
 
 def value_stream_id(theme_stub: Worklet) -> str:
     """
-    Read the Value Stream id for a theme stub - its ``parentWorkletId`` (the catalogue lookup key).
+    Read the Value Stream id (the SQL catalogue lookup key) from the stub's ``valueStreamId`` property.
+
+    This is the business id (e.g. ``VS10000372``), NOT ``parentWorkletId`` (which is the parent VS
+    worklet's internal id).
 
     Args:
-        theme_stub: The THEME worklet stub (parentWorkletId = the value-stream id).
+        theme_stub: The THEME worklet stub.
 
     Returns:
         The Value Stream id.
     """
-    return theme_stub.parent_worklet_id or ""
+    return get_property(theme_stub, ThemeProps.VALUE_STREAM_ID, "")
 
 
 def to_er_context(er_worklet: Worklet) -> ERContext:

@@ -23,7 +23,7 @@ ThemeGenerationHandler(
 
 async def run(
     er_worklet:  Worklet,          # the Engagement Request worklet
-    theme_stubs: list[Worklet],    # the THEME stubs (parentWorkletId = vsWorkletId), one per VS
+    theme_stubs: list[Worklet],    # the THEME stubs (each has a valueStreamId property), one per VS
 ) -> list[Worklet]                 # the same theme stubs, each enriched with theme properties
 ```
 
@@ -69,11 +69,12 @@ one call. From **each** stub, only the parent id is read:
 
 | Read (per stub) | Worklet field |
 | --- | --- |
-| value-stream id (VSR…) | `parentWorkletId` (= the VS worklet id; the catalogue lookup key) |
+| value-stream id (e.g. `VS10000372`) | `valueStreamId` **property** (the catalogue lookup key) |
 
-**Only `parentWorkletId`.** Name, description, value proposition, trigger, stages, and capabilities
-all come from SQL (the catalogue), keyed by that id. Any other properties on the stub are preserved
-(see output) but not read.
+**Only the `valueStreamId` property.** Name, description, value proposition, trigger, stages, and
+capabilities all come from SQL (the catalogue), keyed by that id. (`parentWorkletId` is the parent VS
+worklet's internal id, not the catalogue key.) Other properties on the stub are preserved (see output)
+but not read.
 
 ### 2.3 Output — the enriched THEME stubs (one per value stream)
 

@@ -58,8 +58,8 @@ def _er():
 
 
 def _stub(vs_id):
-    # A THEME stub: parentWorkletId carries the VS id (the catalogue lookup key).
-    return _Worklet(id=f"theme-{vs_id}", parent_worklet_id=vs_id, properties=[])
+    # A THEME stub: the valueStreamId PROPERTY carries the VS id (the catalogue lookup key).
+    return _Worklet(id=f"theme-{vs_id}", properties=[_Prop("valueStreamId", vs_id)])
 
 
 class FakeCatalogue:

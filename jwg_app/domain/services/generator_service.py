@@ -92,7 +92,7 @@ class GeneratorService:
         Actions:
             - null:     Upsert (save/edit VS worklets)
             - GENERATE: Generate Theme package (TEGApiSpec §6 - Screen 3). Input: THEME worklet stubs
-              with parentWorkletId = vsWorkletId.
+              with a valueStreamId property = the VS id.
         """
         await self.worklet_api_vs.begin()
 
@@ -132,19 +132,19 @@ class GeneratorService:
         Generate Theme packages for the approved Value Streams via ThemeGenerationHandler.
 
         TEGApiSpec §6 - Screen 3. Endpoint: POST /api/v1/worklets/{erWorkletId}/worklets, GENERATE.
-        Each THEME worklet stub carries parentWorkletId = vsWorkletId. The handler is multi-VS: it
+        Each THEME worklet stub carries a valueStreamId property (the VS id). The handler is multi-VS: it
         takes the full list of VS worklets and batches stage/description/capability selection across
         them.
 
         Args:
             engagement_request_id: ER worklet ID (URL path param).
-            theme_stubs: THEME worklet stubs from the request body (parentWorkletId = a VS worklet ID).
+            theme_stubs: THEME worklet stubs from the request body (each has a valueStreamId property).
             user_info: Authenticated user performing the operation.
 
         Returns:
             The list of saved THEME worklets (one per approved Value Stream).
         """
-        # Step 0 - collect ALL VS worklet ids from the stubs' parentWorkletId (deduped, order kept).
+        # Step 0 - collect ALL VS ids from each stub's valueStreamId property (deduped, order kept).
         if not theme_stubs:
             raise CustomException(
                 status_code=HTTPStatus.BAD_REQUEST,
@@ -152,13 +152,14 @@ class GeneratorService:
             )
         value_stream_ids: List[str] = []
         for stub in theme_stubs:
-            if not stub.parent_worklet_id:
+            vs_id = stub.get_property_value("valueStreamId")
+            if not vs_id:
                 raise CustomException(
                     status_code=HTTPStatus.BAD_REQUEST,
-                    detail="Theme stub must have parentWorkletId set to the VS worklet ID",
+                    detail="Theme stub must have a valueStreamId property",
                 )
-            if stub.parent_worklet_id not in value_stream_ids:
-                value_stream_ids.append(stub.parent_worklet_id)
+            if vs_id not in value_stream_ids:
+                value_stream_ids.append(vs_id)
 
         # Step 1 - fetch and validate the Engagement Request.
         er_worklet = await self.get_worklet_by_id(engagement_request_id)

@@ -204,8 +204,8 @@ def build_er_worklet(raw_text: str) -> Worklet:
 
 
 def build_theme_stubs() -> List[Worklet]:
-    # THEME stubs: parentWorkletId carries the VS id (the catalogue lookup key).
-    return [Worklet(parent_worklet_id=vs_id, properties=[]) for vs_id, _, _ in VALUE_STREAMS]
+    # THEME stubs: the valueStreamId property carries the VS id (the catalogue lookup key).
+    return [Worklet(properties=[_prop("valueStreamId", vs_id)]) for vs_id, _, _ in VALUE_STREAMS]
 
 
 # --- run -----------------------------------------------------------------------------------

@@ -6,8 +6,8 @@ names below are the only coupling to the worklet shape and are defined there as 
 constants (`ERProps`, `DocsSummaryKeys`, `VSProps`, `ThemeProps`).
 
 `ThemeGenerationHandler.run(er_worklet, theme_stubs)` takes one engagement-request worklet and the
-list of THEME worklet stubs (one per approved value stream; each stub's `parentWorkletId` = the VS
-id), and returns the same stubs, each enriched with the generated theme content.
+list of THEME worklet stubs (one per approved value stream; each stub carries a `valueStreamId`
+property = the VS id), and returns the same stubs, each enriched with the generated theme content.
 
 ---
 
@@ -31,20 +31,21 @@ retrieval artifact.
 ## 2. THEME worklet stub — input
 
 One stub per approved value stream. **The stub supplies only the value-stream id** via its
-`parentWorkletId`; every other attribute comes from the governed SQL catalogue (the single source of
-truth), keyed by that id.
+`valueStreamId` **property** (e.g. `VS10000372`); every other attribute comes from the governed SQL
+catalogue (the single source of truth), keyed by that id. (Note: `parentWorkletId` is the parent VS
+worklet's internal id - the tree link - NOT the catalogue key.)
 
 | Domain field (`VSContext`) | Source | Property / catalogue field |
 | --- | --- | --- |
-| `vs_id` | **stub** | `parentWorkletId` — the VSR id used to look up the catalogue |
+| `vs_id` | **stub property** | `valueStreamId` — the VS id used to look up the catalogue |
 | `vs_name` | **SQL catalogue** | `value_stream_name` |
 | `vs_description` | **SQL catalogue** | `value_stream_description` |
 | `value_proposition` | **SQL catalogue** | `value_stream_value_proposition` |
 | `trigger` | **SQL catalogue** | `value_stream_trigger` |
 
-So the stub only needs to carry **`parentWorkletId`** (the catalogue join key). Name, description,
-value proposition, trigger, stages, and L3/L2 capabilities all come from SQL — see the catalogue
-service (`ThemeService` / `ValueStreamCatalogue`).
+So the stub only needs to carry the **`valueStreamId`** property (the catalogue join key). Name,
+description, value proposition, trigger, stages, and L3/L2 capabilities all come from SQL — see the
+catalogue service (`ThemeService` / `ValueStreamCatalogue`).
 
 ### VS fields used per prompt
 
