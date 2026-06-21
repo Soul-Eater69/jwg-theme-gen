@@ -39,6 +39,19 @@ class _Worklet:
         self.parent_worklet_id = parent_worklet_id
         self.properties = properties or []
 
+    def get_property_value(self, name):
+        for p in self.properties:
+            if p.property_name == name:
+                return p.property_value
+        return None
+
+    def upsert_property(self, *, name, value):
+        for p in self.properties:
+            if p.property_name == name:
+                p.property_value = value
+                return
+        self.properties.append(_Prop(name, value))
+
 
 def _er():
     return _Worklet(source_id="t1", id="t1", properties=[_Prop("title", "Ticket Title"), _Prop("rawText", "RAW")])

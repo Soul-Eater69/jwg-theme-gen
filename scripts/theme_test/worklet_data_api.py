@@ -17,8 +17,16 @@ class WorkletState(str, Enum):
     COMPLETED = "COMPLETED"
 
 
+class _Property:
+    """A worklet property: {propertyName, propertyValue} once dumped."""
+
+    def __init__(self, property_name: str, property_value: Any) -> None:
+        self.property_name = property_name
+        self.property_value = property_value
+
+
 class Worklet:
-    """Minimal stand-in for the prod Worklet envelope (the fields the mapper reads/writes)."""
+    """Minimal stand-in for the prod Worklet envelope (the fields + property API the mapper uses)."""
 
     def __init__(
         self,
@@ -35,6 +43,19 @@ class Worklet:
         self.worklet_type = worklet_type
         self.state = state
         self.properties = properties if properties is not None else []
+
+    def get_property_value(self, name: str) -> Any:
+        for p in self.properties:
+            if getattr(p, "property_name", None) == name:
+                return p.property_value
+        return None
+
+    def upsert_property(self, *, name: str, value: Any) -> None:
+        for p in self.properties:
+            if getattr(p, "property_name", None) == name:
+                p.property_value = value
+                return
+        self.properties.append(_Property(name, value))
 
     def __repr__(self) -> str:
         return (

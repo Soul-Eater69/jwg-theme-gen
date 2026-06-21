@@ -13,7 +13,6 @@ from typing import Any
 
 from worklet_data_api import Worklet
 
-from jwg_app.domain.models.base import Property
 from jwg_app.domain.models.theme_generation import (
     ValueStreamCatalogue,
     ERContext,
@@ -26,7 +25,7 @@ from jwg_app.domain.models.theme_generation import (
 
 def get_property(worklet: Worklet, name: str, default: Any = None) -> Any:
     """
-    Read a worklet property value by name.
+    Read a worklet property value by name via the worklet's native ``get_property_value``.
 
     Args:
         worklet: The worklet to read from.
@@ -34,30 +33,24 @@ def get_property(worklet: Worklet, name: str, default: Any = None) -> Any:
         default: The value to return when the property is absent.
 
     Returns:
-        The first property value with ``name``, or ``default`` when absent.
+        The property value with ``name``, or ``default`` when absent.
     """
-    for p in worklet.properties:
-        if p.property_name == name:
-            return p.property_value
-    return default
+    value = worklet.get_property_value(name)
+    return default if value is None else value
 
 
 def set_property(worklet: Worklet, name: str, value: Any) -> None:
     """
-    Write a worklet property value by name.
-
-    Updates the existing property when present, otherwise appends a new one.
+    Write a worklet property value by name via the worklet's native ``upsert_property`` (so the
+    property is created in the worklet's own ``{propertyName, propertyValue}`` shape, updated when
+    present and appended otherwise).
 
     Args:
         worklet: The worklet to write to.
         name: The property name to set.
         value: The value to store.
     """
-    for p in worklet.properties:
-        if p.property_name == name:
-            p.property_value = value
-            return
-    worklet.properties.append(Property(property_name=name, property_value=value))
+    worklet.upsert_property(name=name, value=value)
 
 
 class ERProps:
