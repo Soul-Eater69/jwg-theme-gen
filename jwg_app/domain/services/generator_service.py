@@ -41,6 +41,7 @@ from worklet_data_api import User, Worklet, WorkletDataAPI, WorkletType  # prod 
 from jwg_app.domain.exceptions.custom_exception import CustomException
 from jwg_app.domain.interfaces.platform_client import PlatformClient
 from jwg_app.domain.models.base import ValueStreamAction
+from jwg_app.domain.services.coverage_analysis import CoverageAnalysisService
 from jwg_app.domain.services.theme_generation_handler import ThemeGenerationHandler
 from jwg_app.domain.services.theme_service import ThemeService
 
@@ -72,7 +73,8 @@ class GeneratorService:
         self.auth_info = auth_info
         self.jira_field_provider = jira_field_provider
         self.platform_client = platform_client
-        self.theme_service = theme_service   # NEW
+        self.theme_service = theme_service   # NEW: catalogue reader for theme generation
+        self.coverage_service = CoverageAnalysisService()   # NEW: coverage/creativity scoring (ANALYSE)
         self.logger = logging.getLogger(__name__)
 
     async def handle_value_stream_action(
@@ -221,3 +223,42 @@ class GeneratorService:
             f"Generated Theme package(s) for {len(saved_themes)} VS under ER {engagement_request_id}"
         )
         return saved_themes
+
+    async def _analyze_worklets(self, source_worklet: Worklet, user: User) -> Worklet:
+        """
+        Analyse an Engagement Request: coverage + creativity of its generated themes.
+
+        Replaces the previous STUB (mock 0.0 scores) with the real CoverageAnalysisService. The result
+        is the JSON-ready ``[{metric_name, metric_value}, ...]`` list (Coverage, Creativity), upserted
+        as the ``analysis`` property on the ER worklet.
+
+        DECISIONS (confirm against the LLD):
+          - Context source: the ER's ``rawText`` (what the themes were grounded in). If the contract
+            wants summary + description + Docs Summary instead, build that string and pass it as
+            ``raw_text`` below.
+          - Generated text: CoverageAnalysisService scores each theme's Business Needs (title slot) +
+            description. If all three (title/description/businessNeeds) must be scored, extend
+            CoverageAnalysisService._generated_theme_properties.
+        """
+        # Step 1-2 - fetch + validate the ER (unchanged from the stub).
+        er_worklet = await self.get_worklet_by_id(source_worklet.id)
+        er_validation = await self.validate_worklet(
+            er_worklet, WorkletType.ENGAGEMENT_REQUEST, er_worklet.source_id
+        )
+        if er_validation:
+            raise CustomException(
+                status_code=er_validation["status_code"], detail=er_validation["detail"]
+            )
+
+        # Step 3 - the source text and the generated THEME worklets to score.
+        raw_text = er_worklet.get_property_value("rawText") or ""
+        themes = await self._get_generated_themes_for_analysis(er_worklet)  # returns THEME worklets
+
+        # Step 4 - run real coverage/creativity scoring (serialized, JSON-safe).
+        results_list = self.coverage_service.analyze(raw_text=raw_text, themes=themes)
+
+        # Step 5 - upsert the analysis property on the ER and persist.
+        er_worklet.upsert_property(name="analysis", value=results_list)
+        er_worklet.current_user = user
+        er_worklet = await self.worklet_api_er.update_worklet(er_worklet.id, er_worklet, user)
+        return er_worklet
