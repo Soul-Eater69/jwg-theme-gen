@@ -7,8 +7,8 @@ evaluator expects a raw context property named ``acceptanceCriteria`` and genera
 Needs texts through those two evaluator fields.
 
 ``analyze_worklet`` is the worklet-in / worklet-out entry point: it reads the source context off the
-ER worklet (``rawText``, falling back to ``summary`` + ``description``), scores the themes, and
-attaches the JSON-ready ``analysis`` property on the ER worklet in place.
+ER worklet's ``rawText`` property, scores the themes, and attaches the JSON-ready ``analysis``
+property on the ER worklet in place.
 """
 
 from __future__ import annotations
@@ -52,12 +52,8 @@ class CoverageAnalysisService:
     THEME_DESCRIPTION_PROPERTY = "description"
     THEME_BUSINESS_NEEDS_PROPERTY = "Business Needs"
 
-    # ER worklet properties used as the source context, in priority order. ``rawText`` is the
-    # canonical context (what generation was grounded on); ``summary`` + ``description`` are the
-    # fallback when the ANALYSE payload does not carry ``rawText``.
+    # ER worklet property used as the source context: the raw ticket text generation was grounded on.
     ER_RAW_TEXT_PROPERTY = "rawText"
-    ER_SUMMARY_PROPERTY = "summary"
-    ER_DESCRIPTION_PROPERTY = "description"
 
     CONTEXT_PROPERTY = "acceptanceCriteria"
     GENERATED_TITLE_PROPERTY = "title"
@@ -79,10 +75,10 @@ class CoverageAnalysisService:
         """
         Score an Engagement Request's generated Themes and attach the result to the ER worklet.
 
-        Worklet in, the same worklet out: reads the source context off ``er_worklet`` (``rawText``,
-        falling back to ``summary`` + ``description``), scores the Theme descriptions and Business
-        Needs against it, and upserts the JSON-safe ``analysis`` property on the ER worklet in place
-        (overwriting it on a re-run). The caller persists the returned worklet.
+        Worklet in, the same worklet out: reads the source context off ``er_worklet`` (the ``rawText``
+        property), scores the Theme descriptions and Business Needs against it, and upserts the
+        JSON-safe ``analysis`` property on the ER worklet in place (overwriting it on a re-run). The
+        caller persists the returned worklet.
 
         Args:
             er_worklet: The Engagement Request worklet (the ANALYSE source).
@@ -95,7 +91,7 @@ class CoverageAnalysisService:
         Returns:
             The same ``er_worklet`` with the ``analysis`` property attached.
         """
-        raw_text = self._resolve_context(er_worklet)
+        raw_text = _get_property(er_worklet, self.ER_RAW_TEXT_PROPERTY, "") or ""
         result = self.analyze(
             raw_text=raw_text,
             themes=themes,
@@ -181,19 +177,6 @@ class CoverageAnalysisService:
             "coverage_color": _enum_value(coverage_color),
             "creativity_color": _enum_value(creativity_color),
         }
-
-    def _resolve_context(self, er_worklet: Worklet) -> str:
-        """Source text the Themes are scored against: ``rawText``, else ``summary`` + ``description``.
-
-        The ANALYSE payload may not carry ``rawText`` (the screenshot ER has only ``summary`` and
-        ``description``), so fall back to those joined rather than score against an empty string.
-        """
-        raw_text = _get_property(er_worklet, self.ER_RAW_TEXT_PROPERTY, "") or ""
-        if str(raw_text).strip():
-            return str(raw_text)
-        summary = _get_property(er_worklet, self.ER_SUMMARY_PROPERTY, "") or ""
-        description = _get_property(er_worklet, self.ER_DESCRIPTION_PROPERTY, "") or ""
-        return "\n\n".join(part for part in (str(summary), str(description)) if part.strip())
 
     def _generated_theme_properties(self, theme: Worklet) -> list[dict[str, str]]:
         # title <- Business Needs, description <- the Theme description.

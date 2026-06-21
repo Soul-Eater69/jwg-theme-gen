@@ -151,14 +151,10 @@ def analysis_property(result: list) -> dict   # -> the worklet "analysis" proper
 
 ### Context source (what the themes are scored against)
 
-`analyze_worklet` reads the source context off the ER worklet, in priority order:
-
-1. `rawText` property (canonical — what generation was grounded on), else
-2. `summary` + `description` properties, joined.
-
-The ANALYSE payload does not always carry `rawText` (the live ER carries `summary` + `description`),
-so the fallback keeps scoring from running against an empty string. Only the theme **`description`**
-and **`Business Needs`** texts are scored on the generated side — nothing else.
+`analyze_worklet` scores the themes against the ER worklet's **`rawText`** property only — the raw
+ticket text generation was grounded on. There is no fallback; the ANALYSE payload must carry
+`rawText`. On the generated side, only the theme **`description`** and **`Business Needs`** texts are
+scored — nothing else.
 
 ### Output — the `analysis` property
 

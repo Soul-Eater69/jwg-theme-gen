@@ -230,9 +230,9 @@ class GeneratorService:
         Analyse an Engagement Request: coverage + creativity of its generated themes.
 
         Worklet in, the same worklet out. ``CoverageAnalysisService.analyze_worklet`` reads the source
-        context off the ER (``rawText``, falling back to ``summary`` + ``description``), scores each
-        theme's ``description`` + ``Business Needs`` against it, and attaches the JSON-ready
-        ``analysis`` property on the ER worklet in place. Replaces the previous STUB (mock 0.0 scores).
+        context off the ER's ``rawText`` property, scores each theme's ``description`` + ``Business
+        Needs`` against it, and attaches the JSON-ready ``analysis`` property on the ER worklet in
+        place. Replaces the previous STUB (mock 0.0 scores).
         """
         # Step 1-2 - fetch + validate the ER (unchanged from the stub).
         er_worklet = await self.get_worklet_by_id(source_worklet.id)
