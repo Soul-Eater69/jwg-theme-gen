@@ -23,8 +23,8 @@ ThemeGenerationHandler(
 
 async def run(
     er_worklet:  Worklet,          # the Engagement Request worklet
-    vs_worklets: list[Worklet],    # ALL approved Value Stream worklets (themes generated together)
-) -> list[Worklet]                 # the same VS worklets, each enriched with theme properties
+    theme_stubs: list[Worklet],    # the THEME stubs (parentWorkletId = vsWorkletId), one per VS
+) -> list[Worklet]                 # the same theme stubs, each enriched with theme properties
 ```
 
 ### How to construct it (dependency injection)
@@ -62,25 +62,26 @@ names below are read/written exactly as shown.
 
 That's all generation reads from the ER. Summary-derived fields are **not** used.
 
-### 2.2 Value Stream (VS) worklets — input
+### 2.2 THEME worklet stubs — input
 
-`run` takes the **list of all approved VS worklets** and generates every theme in one call. From
-**each** worklet in the list, only the id is read:
+`run` takes the **list of THEME stubs** (one per approved value stream) and generates every theme in
+one call. From **each** stub, only the parent id is read:
 
-| Read (per VS worklet) | Worklet field |
+| Read (per stub) | Worklet field |
 | --- | --- |
-| value-stream id (VSR…) | `source_id` (falls back to `id`) |
+| value-stream id (VSR…) | `parentWorkletId` (= the VS worklet id; the catalogue lookup key) |
 
-**Only the id.** Name, description, value proposition, trigger, stages, and capabilities all come
-from SQL (the catalogue), keyed by that id. Any other properties on the VS worklets are ignored.
+**Only `parentWorkletId`.** Name, description, value proposition, trigger, stages, and capabilities
+all come from SQL (the catalogue), keyed by that id. Any other properties on the stub are preserved
+(see output) but not read.
 
-### 2.3 Output — the enriched VS worklets (one per value stream)
+### 2.3 Output — the enriched THEME stubs (one per value stream)
 
-`run` returns the **same VS worklets it was given**, each with the generated theme properties
-**appended** (the worklet is edited in place; its existing properties are preserved, identity/type
-unchanged). On a re-run the generated properties are overwritten, not duplicated.
+`run` returns the **same THEME stubs it was given**, each with the generated theme properties
+**attached** (edited in place; the stub's existing properties and `parentWorkletId` are preserved).
+On a re-run the generated properties are overwritten, not duplicated.
 
-Appended properties:
+Attached properties:
 
 | Property name | Value |
 | --- | --- |
@@ -216,7 +217,7 @@ to generation; the API team does not build it (the `ThemeService` does). It hold
 # theme generation (per ANALYSE/GENERATE request)
 catalogue = await get_theme_service(session)                     # ThemeCatalogueReader
 handler = ThemeGenerationHandler(catalogue, platform_client, USER_CONFIG_PATH)
-themes = await handler.run(er_worklet, vs_worklets)              # the same VS worklets, enriched; raises on failure
+themes = await handler.run(er_worklet, theme_stubs)             # the same stubs, enriched; raises on failure
 # persist `themes`
 
 # coverage (after generation, on the ER)

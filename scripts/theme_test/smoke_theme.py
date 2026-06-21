@@ -203,9 +203,9 @@ def build_er_worklet(raw_text: str) -> Worklet:
     )
 
 
-def build_vs_worklets() -> List[Worklet]:
-    # The worklet supplies only the id; name/description come from the catalogue.
-    return [Worklet(source_id=vs_id, properties=[]) for vs_id, _, _ in VALUE_STREAMS]
+def build_theme_stubs() -> List[Worklet]:
+    # THEME stubs: parentWorkletId carries the VS id (the catalogue lookup key).
+    return [Worklet(parent_worklet_id=vs_id, properties=[]) for vs_id, _, _ in VALUE_STREAMS]
 
 
 # --- run -----------------------------------------------------------------------------------
@@ -337,20 +337,20 @@ async def main(args: argparse.Namespace) -> None:
         platform = _DebugPlatform(platform)
 
     raw_text = _load_raw_text(args.raw_text_file)
-    er_worklet, vs_worklets = build_er_worklet(raw_text), build_vs_worklets()
-    vs_ids = [mapper.value_stream_id(w) for w in vs_worklets]
-    print(f"# {len(vs_worklets)} value stream(s): {vs_ids} | only={args.only}")
+    er_worklet, theme_stubs = build_er_worklet(raw_text), build_theme_stubs()
+    vs_ids = [mapper.value_stream_id(w) for w in theme_stubs]
+    print(f"# {len(theme_stubs)} value stream(s): {vs_ids} | only={args.only}")
 
     try:
         catalogue = await _fetch_catalogue(args, vs_ids)
         handler = ThemeGenerationHandler(_StaticCatalogue(catalogue), platform, CONFIG_PATH)
         if args.only == "all":
-            themes = await handler.run(er_worklet, vs_worklets)
+            themes = await handler.run(er_worklet, theme_stubs)
             _print_themes(themes)
             if args.coverage:
                 _run_coverage(raw_text, themes)
         else:
-            await _run_only(handler, args.only, er_worklet, vs_worklets, catalogue)
+            await _run_only(handler, args.only, er_worklet, theme_stubs, catalogue)
     finally:
         if hasattr(platform, "aclose"):
             await platform.aclose()
@@ -384,11 +384,11 @@ async def _fetch_catalogue(args, vs_ids):
     return await FakeCatalogueReader().fetch_theme_inputs(vs_ids)
 
 
-async def _run_only(handler, only, er_worklet, vs_worklets, catalogue):
+async def _run_only(handler, only, er_worklet, theme_stubs, catalogue):
     """Run one generator (batched, as in the real pipeline) and print its output per value stream."""
     er = mapper.to_er_context(er_worklet)
-    vs_ids = [mapper.value_stream_id(w) for w in vs_worklets]
-    vs_list = [mapper.to_vs_context(w, catalogue.get(vid, ValueStreamCatalogue())) for w, vid in zip(vs_worklets, vs_ids)]
+    vs_ids = [mapper.value_stream_id(w) for w in theme_stubs]
+    vs_list = [mapper.to_vs_context(vid, catalogue.get(vid, ValueStreamCatalogue())) for vid in vs_ids]
 
     # Compute the requested generator once (same calls the pipeline makes), then display per VS.
     stages_by_vs, body, framings, needs_by_vs, l3_by_stage = {}, "", {}, {}, {}

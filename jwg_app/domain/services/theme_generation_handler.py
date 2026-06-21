@@ -83,33 +83,34 @@ class ThemeGenerationHandler:
         self._usecase = config["theme_generation"]
         self._retry = ThemeGenerationConfig().retry
 
-    async def run(self, er_worklet: Worklet, vs_worklets: list[Worklet]) -> list[Worklet]:
+    async def run(self, er_worklet: Worklet, theme_stubs: list[Worklet]) -> list[Worklet]:
         """
-        Generate one unsaved THEME worklet per approved value stream.
+        Generate theme content and attach it to each theme stub.
 
         Args:
             er_worklet: The engagement-request worklet that grounds generation.
-            vs_worklets: The approved value-stream worklets, one Theme each.
+            theme_stubs: The THEME worklet stubs, one per approved value stream. Each stub's
+                ``parent_worklet_id`` is the value-stream id used to read the catalogue.
 
         Returns:
-            One unsaved THEME worklet per approved value stream, for the caller to persist. The call
-            is all-or-nothing: either every value stream produces a theme, or the request raises.
+            The same theme stubs, each with the generated theme properties attached. The call is
+            all-or-nothing: either every stub is enriched, or the request raises.
 
         Raises:
-            CustomException: Aborts the whole request - 404 if the ER or VS worklets are missing; 503
+            CustomException: Aborts the whole request - 404 if the ER or theme stubs are missing; 503
                 if Azure SQL or any LLM call (description body/framing, stage selection, capabilities,
                 or a value stream's business needs) is unavailable after retries; 400 if a value
-                stream unexpectedly resolved no stages. Every value stream is attempted (and each call
+                stream unexpectedly resolved no stages. Every stub is attempted (and each call
                 retried) before the request fails.
         """
-        if er_worklet is None or not vs_worklets:
-            logger.error("theme generation aborted (404): ER worklet or VS worklet not found")
+        if er_worklet is None or not theme_stubs:
+            logger.error("theme generation aborted (404): ER worklet or theme stub not found")
             raise CustomException(
                 status_code=404, detail="ER worklet or VS worklet not found"
             )
 
         er = mapper.to_er_context(er_worklet)
-        vs_ids = [mapper.value_stream_id(w) for w in vs_worklets]
+        vs_ids = [mapper.value_stream_id(stub) for stub in theme_stubs]  # the stub's parentWorkletId
         try:
             catalogue = await self._azure_sql.fetch_theme_inputs(vs_ids)
         except CustomException:
@@ -120,8 +121,8 @@ class ThemeGenerationHandler:
                 status_code=503, detail="Azure SQL service unavailable"
             ) from exc
         vs_by_id = {
-            vs_id: mapper.to_vs_context(worklet, catalogue.get(vs_id, ValueStreamCatalogue()))
-            for worklet, vs_id in zip(vs_worklets, vs_ids)
+            vs_id: mapper.to_vs_context(vs_id, catalogue.get(vs_id, ValueStreamCatalogue()))
+            for vs_id in vs_ids
         }
         vs_list = list(vs_by_id.values())
         logger.info(
@@ -151,8 +152,8 @@ class ThemeGenerationHandler:
         # request fails - all-or-nothing, so the caller never receives a silently-incomplete set.
         results = await asyncio.gather(
             *(
-                self._build_theme(worklet, vs_by_id[vs_id], er, stages_by_vs, l3_by_stage, body, framings)
-                for worklet, vs_id in zip(vs_worklets, vs_ids)
+                self._build_theme(stub, vs_by_id[vs_id], er, stages_by_vs, l3_by_stage, body, framings)
+                for stub, vs_id in zip(theme_stubs, vs_ids)
             ),
             return_exceptions=True,
         )
@@ -167,7 +168,7 @@ class ThemeGenerationHandler:
 
     async def _build_theme(
         self,
-        vs_worklet: Worklet,
+        theme_stub: Worklet,
         vs: VSContext,
         er: ERContext,
         stages_by_vs: dict[str, list[SelectedStage]],
@@ -175,7 +176,7 @@ class ThemeGenerationHandler:
         body: str,
         framings: dict[str, str],
     ) -> Worklet:
-        """Run one value stream's flow (business needs + assembly) and build its THEME worklet.
+        """Run one value stream's flow (business needs + assembly) and attach it to the theme stub.
 
         Raises ``CustomException`` on failure; the caller aborts the whole request (all-or-nothing).
         """
@@ -187,7 +188,7 @@ class ThemeGenerationHandler:
         business_needs = await self._business_needs_for_vs(er, vs, stages)
         l3 = [cap for stage in stages for cap in l3_by_stage.get(stage.stage_id, [])]
         return mapper.to_theme_worklet(
-            vs_worklet,
+            theme_stub,
             title=f"{er.idmt_ticket_title} -- {vs.vs_name}",
             description=self._theme_description(framings.get(vs.vs_id, ""), body),
             business_needs=business_needs,

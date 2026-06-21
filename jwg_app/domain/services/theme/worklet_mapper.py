@@ -77,17 +77,17 @@ class ThemeProps:
     L2 = "L2 Business Capability"
 
 
-def value_stream_id(vs_worklet: Worklet) -> str:
+def value_stream_id(theme_stub: Worklet) -> str:
     """
-    Read the external Value Stream id used for catalogue lookups.
+    Read the Value Stream id for a theme stub - its ``parentWorkletId`` (the catalogue lookup key).
 
     Args:
-        vs_worklet: The value-stream worklet.
+        theme_stub: The THEME worklet stub (parentWorkletId = the value-stream id).
 
     Returns:
-        The external Value Stream id.
+        The Value Stream id.
     """
-    return _worklet_identity(vs_worklet)
+    return theme_stub.parent_worklet_id or ""
 
 
 def to_er_context(er_worklet: Worklet) -> ERContext:
@@ -108,23 +108,21 @@ def to_er_context(er_worklet: Worklet) -> ERContext:
     )
 
 
-def to_vs_context(vs_worklet: Worklet, catalogue: ValueStreamCatalogue) -> VSContext:
+def to_vs_context(vs_id: str, catalogue: ValueStreamCatalogue) -> VSContext:
     """
-    Build the value-stream context. The worklet supplies only the id; all other attributes
-    (name, description, value proposition, trigger) come from the governed catalogue.
+    Build the value-stream context from the catalogue. Every attribute (name, description, value
+    proposition, trigger) comes from the governed catalogue; only the id is passed in.
 
     Args:
-        vs_worklet: The value-stream worklet (read for its id only).
+        vs_id: The value-stream id (from the theme stub's parentWorkletId).
         catalogue: The catalogue record for this value stream.
 
     Returns:
         The value-stream context.
     """
     vs = catalogue.value_stream
-
-    # The worklet supplies only the id; name/description/proposition/trigger come from the catalogue.
     return VSContext(
-        vs_id=value_stream_id(vs_worklet),
+        vs_id=vs_id,
         vs_name=vs.name,
         vs_description=vs.description,
         value_proposition=vs.value_proposition,
@@ -133,7 +131,7 @@ def to_vs_context(vs_worklet: Worklet, catalogue: ValueStreamCatalogue) -> VSCon
 
 
 def to_theme_worklet(
-    vs_worklet: Worklet,
+    theme_stub: Worklet,
     *,
     title: str,
     description: str,
@@ -143,14 +141,14 @@ def to_theme_worklet(
     l2: Sequence[L2Capability],
 ) -> Worklet:
     """
-    Append the generated theme content onto the value-stream worklet and return it.
+    Attach the generated theme content onto the theme stub and return it.
 
-    The worklet's existing properties are preserved; the generated properties below are added (or
-    overwritten if already present, e.g. on a re-run). The worklet is edited in place - the API layer
-    persists the same worklet.
+    The stub's existing properties (and its identity/parentWorkletId) are preserved; the generated
+    properties below are added, or overwritten if already present (e.g. on a re-run). The stub is
+    edited in place - the API layer persists the same worklet.
 
     Args:
-        vs_worklet: The value-stream worklet to enrich (edited in place).
+        theme_stub: The THEME worklet stub to enrich (edited in place).
         title: The Theme title.
         description: The Theme description.
         business_needs: The Business Needs text.
@@ -159,7 +157,7 @@ def to_theme_worklet(
         l2: The derived L2 capabilities.
 
     Returns:
-        The same value-stream worklet, with the generated theme properties appended.
+        The same theme stub, with the generated theme properties attached.
     """
     # CamelModel forces by_alias on model_dump, so the property values serialize camelCase.
     properties = {
@@ -173,11 +171,6 @@ def to_theme_worklet(
     }
 
     for name, value in properties.items():
-        set_property(vs_worklet, name, value)
+        set_property(theme_stub, name, value)
 
-    return vs_worklet
-
-
-def _worklet_identity(worklet: Worklet) -> str:
-    """Return the worklet's external source id, falling back to its internal id."""
-    return worklet.source_id or worklet.id or ""
+    return theme_stub

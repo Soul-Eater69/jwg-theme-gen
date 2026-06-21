@@ -33,9 +33,10 @@ class _Prop:
 
 
 class _Worklet:
-    def __init__(self, source_id=None, id=None, properties=None):
+    def __init__(self, source_id=None, id=None, parent_worklet_id=None, properties=None):
         self.source_id = source_id
         self.id = id
+        self.parent_worklet_id = parent_worklet_id
         self.properties = properties or []
 
 
@@ -43,9 +44,9 @@ def _er():
     return _Worklet(source_id="t1", id="t1", properties=[_Prop("title", "Ticket Title"), _Prop("rawText", "RAW")])
 
 
-def _vs(vs_id):
-    # The worklet supplies only the id; name/description come from the catalogue.
-    return _Worklet(source_id=vs_id, id=f"w-{vs_id}", properties=[])
+def _stub(vs_id):
+    # A THEME stub: parentWorkletId carries the VS id (the catalogue lookup key).
+    return _Worklet(id=f"theme-{vs_id}", parent_worklet_id=vs_id, properties=[])
 
 
 class FakeCatalogue:
@@ -144,7 +145,7 @@ def _catalogue_with_stages(*vs_ids):
 def test_missing_er_worklet_raises_404():
     handler = ThemeGenerationHandler(FakeCatalogue({}), FakePlatform(), CONFIG_PATH)
     with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(None, [_vs("vs1")]))
+        asyncio.run(handler.run(None, [_stub("vs1")]))
     assert exc.value.status_code == 404
 
 
@@ -158,7 +159,7 @@ def test_empty_vs_worklets_raises_404():
 def test_catalogue_failure_raises_503():
     handler = ThemeGenerationHandler(RaisingCatalogue(), FakePlatform(), CONFIG_PATH)
     with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_vs("vs1")]))
+        asyncio.run(handler.run(_er(), [_stub("vs1")]))
     assert exc.value.status_code == 503
 
 
@@ -166,14 +167,14 @@ def test_vs_with_no_stages_raises_400():
     # all-or-nothing: a value stream with no stages fails the whole request
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), FakePlatform(), CONFIG_PATH)
     with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_vs("vs1"), _vs("vs2")]))
+        asyncio.run(handler.run(_er(), [_stub("vs1"), _stub("vs2")]))
     assert exc.value.status_code == 400
 
 
 def test_non_retryable_llm_failure_raises_503():
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), FailingPlatform(), CONFIG_PATH)
     with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_vs("vs1")]))
+        asyncio.run(handler.run(_er(), [_stub("vs1")]))
     assert exc.value.status_code == 503
 
 
@@ -186,7 +187,7 @@ def test_any_core_call_failure_raises_503(schema):
     platform = SchemaFailingPlatform(failing_schema=schema)
     handler = _handler_with_retry(platform, RetryConfig(enabled=False))
     with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_vs("vs1")]))
+        asyncio.run(handler.run(_er(), [_stub("vs1")]))
     assert exc.value.status_code == 503
 
 
@@ -230,7 +231,7 @@ def test_non_retryable_status_is_not_retried(status):
 
 def test_produces_one_theme_per_value_stream():
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1", "vs2"), FakePlatform(), CONFIG_PATH)
-    themes = asyncio.run(handler.run(_er(), [_vs("vs1"), _vs("vs2")]))
+    themes = asyncio.run(handler.run(_er(), [_stub("vs1"), _stub("vs2")]))
 
     assert len(themes) == 2
     titles = [mapper.get_property(t, mapper.ThemeProps.TITLE, "") for t in themes]
@@ -249,5 +250,5 @@ def test_any_vs_business_needs_failure_raises_503():
         platform, RetryConfig(enabled=False), catalogue=_catalogue_with_stages("vs1", "vs2")
     )
     with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_vs("vs1"), _vs("vs2")]))
+        asyncio.run(handler.run(_er(), [_stub("vs1"), _stub("vs2")]))
     assert exc.value.status_code == 503

@@ -5,8 +5,9 @@ worklet ↔ domain translation lives in `jwg_app/domain/services/theme/worklet_m
 names below are the only coupling to the worklet shape and are defined there as class-namespaced
 constants (`ERProps`, `DocsSummaryKeys`, `VSProps`, `ThemeProps`).
 
-`ThemeGenerationHandler.run(er_worklet, vs_worklets)` takes one engagement-request worklet and the
-list of approved value-stream worklets, and returns one unsaved **THEME** worklet per value stream.
+`ThemeGenerationHandler.run(er_worklet, theme_stubs)` takes one engagement-request worklet and the
+list of THEME worklet stubs (one per approved value stream; each stub's `parentWorkletId` = the VS
+id), and returns the same stubs, each enriched with the generated theme content.
 
 ---
 
@@ -27,20 +28,21 @@ retrieval artifact.
 
 ---
 
-## 2. Value Stream (VS) worklet — input
+## 2. THEME worklet stub — input
 
-Read by `to_vs_context`. **The worklet supplies only the value-stream id**; every other attribute
-comes from the governed SQL catalogue (the single source of truth), keyed by that id.
+One stub per approved value stream. **The stub supplies only the value-stream id** via its
+`parentWorkletId`; every other attribute comes from the governed SQL catalogue (the single source of
+truth), keyed by that id.
 
 | Domain field (`VSContext`) | Source | Property / catalogue field |
 | --- | --- | --- |
-| `vs_id` | **worklet** identity | `source_id` (fallback `id`) — the VSR id used to look up the catalogue |
+| `vs_id` | **stub** | `parentWorkletId` — the VSR id used to look up the catalogue |
 | `vs_name` | **SQL catalogue** | `value_stream_name` |
 | `vs_description` | **SQL catalogue** | `value_stream_description` |
 | `value_proposition` | **SQL catalogue** | `value_stream_value_proposition` |
 | `trigger` | **SQL catalogue** | `value_stream_trigger` |
 
-So the VS worklet only needs to carry the **`vs_id`** (the catalogue join key). Name, description,
+So the stub only needs to carry **`parentWorkletId`** (the catalogue join key). Name, description,
 value proposition, trigger, stages, and L3/L2 capabilities all come from SQL — see the catalogue
 service (`ThemeService` / `ValueStreamCatalogue`).
 
@@ -63,11 +65,12 @@ service (`ThemeService` / `ValueStreamCatalogue`).
 
 ---
 
-## 3. Output — the enriched VS worklets
+## 3. Output — the enriched THEME stubs
 
-`to_theme_worklet` **edits the incoming VS worklet in place**: it appends the generated properties to
-the worklet's existing properties (overwriting them on a re-run) and returns the same worklet. The
-worklet's identity and type are unchanged - there is no new worklet; the caller persists the same one.
+`to_theme_worklet` **attaches the generated content onto the incoming THEME stub in place**: it adds
+the generated properties to the stub's existing properties (overwriting them on a re-run) and returns
+the same stub. The stub's identity, type, and `parentWorkletId` are unchanged - there is no new
+worklet; the caller persists the same stub.
 
 **Appended properties** (set via `set_property` - update-or-append)
 

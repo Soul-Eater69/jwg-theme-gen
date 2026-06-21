@@ -168,8 +168,8 @@ class GeneratorService:
                 status_code=er_validation["status_code"], detail=er_validation["detail"]
             )
 
-        # Step 2 - fetch and validate EACH Value Stream worklet.
-        vs_worklets: List[Worklet] = []
+        # Step 2 - validate EACH referenced Value Stream exists (the handler reads its data from SQL;
+        # we only confirm the VS worklet is present and parented to this ER).
         for value_stream_id in value_stream_ids:
             vs_worklet = await self.get_worklet_by_id(value_stream_id)
             vs_validation = await self.validate_worklet(
@@ -182,18 +182,18 @@ class GeneratorService:
                 raise CustomException(
                     status_code=vs_validation["status_code"], detail=vs_validation["detail"]
                 )
-            vs_worklets.append(vs_worklet)
 
-        # Step 3 - run generation. The catalogue reader (ThemeService) is injected via DI; the
-        # handler reads VS attributes/stages/capabilities from Azure SQL through it (list -> list).
+        # Step 3 - run generation on the THEME stubs. The catalogue reader (ThemeService) is injected
+        # via DI; the handler reads each VS's attributes/stages/capabilities from Azure SQL (keyed by
+        # the stub's parentWorkletId) and attaches the generated content onto each stub (list -> list).
         handler = ThemeGenerationHandler(
             azure_sql_client=self.theme_service,
             platform_client=self.platform_client,
             user_config_path="configs/user_config.yaml",
         )
-        theme_worklets = await handler.run(er_worklet=er_worklet, vs_worklets=vs_worklets)
+        theme_worklets = await handler.run(er_worklet=er_worklet, theme_stubs=theme_stubs)
 
-        # Step 4 - persist each enriched THEME worklet (the handler edited the VS worklets in place).
+        # Step 4 - persist each enriched THEME stub (the handler attached the content in place).
         saved_themes: List[Worklet] = []
         for theme_worklet in theme_worklets:
             theme_worklet.current_user = user_info
