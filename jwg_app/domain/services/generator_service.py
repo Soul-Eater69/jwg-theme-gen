@@ -31,7 +31,7 @@ repositories to the request's AsyncSession - the same shape as get_value_stream_
 """
 
 from http import HTTPStatus
-from typing import List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from worklet_data_api import User, Worklet, WorkletType  # prod package
 
@@ -39,13 +39,25 @@ from jwg_app.domain.exceptions.custom_exception import CustomException
 from jwg_app.domain.models.base import ValueStreamAction
 from jwg_app.domain.services.theme_generation_handler import ThemeGenerationHandler
 
+if TYPE_CHECKING:
+    from jwg_app.domain.services.theme_service import ThemeService
+
 
 class GeneratorService:
     """Partial reference — theme-generation methods only.
 
     Assumes ``self.theme_service`` (a ThemeService) is injected via the GeneratorService DI provider,
-    alongside the existing ``self.platform_client`` / ``self.session`` / helpers.
+    alongside the existing ``self.platform_client`` / helpers.
     """
+
+    def __init__(
+        self,
+        *,
+        theme_service: "ThemeService",   # NEW: the catalogue reader for theme generation
+        # ... existing GeneratorService dependencies (platform_client, worklet apis, logger, ...) ...
+    ) -> None:
+        self.theme_service = theme_service
+        # ... store the existing dependencies as before ...
 
     async def handle_value_stream_action(
         self,
