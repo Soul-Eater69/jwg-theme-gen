@@ -229,17 +229,10 @@ class GeneratorService:
         """
         Analyse an Engagement Request: coverage + creativity of its generated themes.
 
-        Replaces the previous STUB (mock 0.0 scores) with the real CoverageAnalysisService. The result
-        is the JSON-ready ``[{metric_name, metric_value}, ...]`` list (Coverage, Creativity), upserted
-        as the ``analysis`` property on the ER worklet.
-
-        DECISIONS (confirm against the LLD):
-          - Context source: the ER's ``rawText`` (what the themes were grounded in). If the contract
-            wants summary + description + Docs Summary instead, build that string and pass it as
-            ``raw_text`` below.
-          - Generated text: CoverageAnalysisService scores each theme's Business Needs (title slot) +
-            description. If all three (title/description/businessNeeds) must be scored, extend
-            CoverageAnalysisService._generated_theme_properties.
+        Worklet in, the same worklet out. ``CoverageAnalysisService.analyze_worklet`` reads the source
+        context off the ER (``rawText``, falling back to ``summary`` + ``description``), scores each
+        theme's ``description`` + ``Business Needs`` against it, and attaches the JSON-ready
+        ``analysis`` property on the ER worklet in place. Replaces the previous STUB (mock 0.0 scores).
         """
         # Step 1-2 - fetch + validate the ER (unchanged from the stub).
         er_worklet = await self.get_worklet_by_id(source_worklet.id)
@@ -251,15 +244,14 @@ class GeneratorService:
                 status_code=er_validation["status_code"], detail=er_validation["detail"]
             )
 
-        # Step 3 - the source text and the generated THEME worklets to score.
-        raw_text = er_worklet.get_property_value("rawText") or ""
+        # Step 3 - the generated THEME worklets to score (the context comes off the ER inside the
+        # service).
         themes = await self._get_generated_themes_for_analysis(er_worklet)  # returns THEME worklets
 
-        # Step 4 - run real coverage/creativity scoring (serialized, JSON-safe).
-        results_list = self.coverage_service.analyze(raw_text=raw_text, themes=themes)
+        # Step 4 - score and attach the ``analysis`` property to the ER worklet in place.
+        er_worklet = self.coverage_service.analyze_worklet(er_worklet=er_worklet, themes=themes)
 
-        # Step 5 - upsert the analysis property on the ER and persist.
-        er_worklet.upsert_property(name="analysis", value=results_list)
+        # Step 5 - persist the enriched ER worklet.
         er_worklet.current_user = user
         er_worklet = await self.worklet_api_er.update_worklet(er_worklet.id, er_worklet, user)
         return er_worklet

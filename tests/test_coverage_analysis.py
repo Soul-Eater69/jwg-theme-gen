@@ -13,6 +13,13 @@ class _Worklet:
     def __init__(self, properties=None):
         self.properties = properties or []
 
+    def upsert_property(self, *, name, value):
+        for prop in self.properties:
+            if prop.property_name == name:
+                prop.property_value = value
+                return
+        self.properties.append(_Prop(name, value))
+
 
 class _FakeEvaluator:
     def __init__(self):
@@ -102,6 +109,43 @@ def test_analysis_property_wraps_result_for_api_contract():
         "propertyName": "analysis",
         "propertyValue": analysis,
     }
+
+
+def test_analyze_worklet_attaches_analysis_property_in_place():
+    evaluator = _FakeEvaluator()
+    service = CoverageAnalysisService(evaluator=evaluator)
+    er = _Worklet([_Prop("rawText", "raw ticket text")])
+
+    result = service.analyze_worklet(er_worklet=er, themes=[_theme("desc", "needs")])
+
+    # same worklet back, with the analysis property attached.
+    assert result is er
+    assert er.properties[-1].property_name == "analysis"
+    assert er.properties[-1].property_value == [{"coverage": 0.75}]
+    # the context scored against was the rawText property.
+    assert evaluator.dataset["context"][0]["propertyValue"] == "raw ticket text"
+
+
+def test_analyze_worklet_falls_back_to_summary_and_description():
+    evaluator = _FakeEvaluator()
+    service = CoverageAnalysisService(evaluator=evaluator)
+    # ANALYSE payload with no rawText (matches the screenshot ER).
+    er = _Worklet([_Prop("summary", "the summary"), _Prop("description", "the description")])
+
+    service.analyze_worklet(er_worklet=er, themes=[_theme("desc", "needs")])
+
+    assert evaluator.dataset["context"][0]["propertyValue"] == "the summary\n\nthe description"
+
+
+def test_analyze_worklet_overwrites_analysis_on_rerun():
+    service = CoverageAnalysisService(evaluator=_FakeEvaluator())
+    er = _Worklet([_Prop("rawText", "raw"), _Prop("analysis", "stale")])
+
+    service.analyze_worklet(er_worklet=er, themes=[_theme("d", "n")])
+
+    analysis = [p for p in er.properties if p.property_name == "analysis"]
+    assert len(analysis) == 1
+    assert analysis[0].property_value == [{"coverage": 0.75}]
 
 
 class _FakeMetric:

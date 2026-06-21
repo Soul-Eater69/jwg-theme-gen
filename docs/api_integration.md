@@ -133,17 +133,32 @@ upserted as an `analysis` property on the **ER** worklet.
 ```python
 CoverageAnalysisService(evaluator: CoverageEvaluator | None = None)   # default loads NgramEvaluator
 
-def analyze(
-    *, raw_text: str,
+# Worklet in -> the same worklet out (preferred): reads the context off the ER, scores the themes,
+# attaches the JSON-ready ``analysis`` property on the ER worklet in place, and returns it.
+def analyze_worklet(
+    *, er_worklet: Worklet,                # the ANALYSE source (Engagement Request) worklet
     themes: list[Worklet],                 # the generated THEME worklets
     n: int = 1,
     remove_stopwords: bool = True,
     coverage_color: Any = "green",
     creativity_color: Any = "orange",
-) -> list[dict]                            # one JSON dict per metric (Coverage, Creativity) - already serialized
+) -> Worklet                              # the same er_worklet, with the "analysis" property attached
 
+# Lower-level (text in -> scores out), if you already hold the raw text:
+def analyze(*, raw_text: str, themes: list[Worklet], ...) -> list[dict]   # one dict per metric, serialized
 def analysis_property(result: list) -> dict   # -> the worklet "analysis" property (JSON-safe)
 ```
+
+### Context source (what the themes are scored against)
+
+`analyze_worklet` reads the source context off the ER worklet, in priority order:
+
+1. `rawText` property (canonical — what generation was grounded on), else
+2. `summary` + `description` properties, joined.
+
+The ANALYSE payload does not always carry `rawText` (the live ER carries `summary` + `description`),
+so the fallback keeps scoring from running against an empty string. Only the theme **`description`**
+and **`Business Needs`** texts are scored on the generated side — nothing else.
 
 ### Output — the `analysis` property
 
@@ -221,9 +236,8 @@ handler = ThemeGenerationHandler(catalogue, platform_client, USER_CONFIG_PATH)
 themes = await handler.run(er_worklet, theme_stubs)             # the same stubs, enriched; raises on failure
 # persist `themes`
 
-# coverage (after generation, on the ER)
+# coverage (after generation, on the ER) - worklet in, the same worklet out
 service = CoverageAnalysisService()                              # default NgramEvaluator
-result = service.analyze(raw_text=er_raw_text, themes=themes)
-er_worklet.set_property("analysis", service.analysis_property(result)["propertyValue"])
+er_worklet = service.analyze_worklet(er_worklet=er_worklet, themes=themes)  # "analysis" attached in place
 # update + commit the ER worklet
 ```

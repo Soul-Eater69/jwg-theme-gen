@@ -239,8 +239,8 @@ def _register_bundled_nltk_data() -> None:
             pass
 
 
-def _run_coverage(raw_text: str, themes: List[Worklet]) -> None:
-    """Run coverage analysis on the generated theme worklets against the raw ticket text."""
+def _run_coverage(er_worklet: Worklet, raw_text: str, themes: List[Worklet]) -> None:
+    """Run coverage analysis on the generated theme worklets, worklet in -> worklet out."""
     from jwg_app.domain.services.coverage_analysis import CoverageAnalysisService
 
     _register_bundled_nltk_data()
@@ -250,7 +250,8 @@ def _run_coverage(raw_text: str, themes: List[Worklet]) -> None:
     print(f"# coverage analysis: {len(dataset['generated_text'])} theme(s) scored vs raw text "
           f"({len(raw_text)} chars)")
     try:
-        result = service.analyze(raw_text=raw_text, themes=themes)
+        # analyze_worklet attaches the ``analysis`` property to the ER worklet in place.
+        analyzed = service.analyze_worklet(er_worklet=er_worklet, themes=themes)
     except RuntimeError as exc:
         # The n-gram evaluator (text_evaluation) is a prod dependency; print the dataset instead.
         print(f"# evaluator unavailable: {exc}")
@@ -259,7 +260,10 @@ def _run_coverage(raw_text: str, themes: List[Worklet]) -> None:
         return
 
     # The serialized worklet "analysis" property - exactly what the API would return on the ER.
-    analysis = service.analysis_property(result)
+    analysis = next(
+        (p for p in analyzed.properties if p.property_name == service.ANALYSIS_PROPERTY), None
+    )
+    analysis = {"propertyName": service.ANALYSIS_PROPERTY, "propertyValue": analysis.property_value}
     for metric in analysis["propertyValue"]:
         name = metric.get("metric_name")
         value = metric.get("metric_value", {})
@@ -348,7 +352,7 @@ async def main(args: argparse.Namespace) -> None:
             themes = await handler.run(er_worklet, theme_stubs)
             _print_themes(themes)
             if args.coverage:
-                _run_coverage(raw_text, themes)
+                _run_coverage(er_worklet, raw_text, themes)
         else:
             await _run_only(handler, args.only, er_worklet, theme_stubs, catalogue)
     finally:
