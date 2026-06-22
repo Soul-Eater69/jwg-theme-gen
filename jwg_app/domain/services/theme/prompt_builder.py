@@ -133,10 +133,7 @@ def _vs_l3_block(
         lines = [f"### Stage {stage.stage_id}: {stage.stage_name}"]
         if stage.stage_description:
             lines.append(f"Description: {stage.stage_description}")
-        lines.append(
-            "Candidate L3 capabilities (return the chosen ids exactly as shown in brackets; "
-            "each shows its parent L2):"
-        )
+        lines.append("Candidate L3 capabilities (choose by id; each shows its parent L2):")
         lines += [_l3_line(c) for c in caps]
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks)

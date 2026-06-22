@@ -105,6 +105,16 @@ def test_resolve_l3_keeps_known_and_marks_selected():
     assert out["s1"][0].selected and out["s1"][0].llm_selected
 
 
+def test_resolve_l3_tolerates_bracketed_or_padded_ids():
+    # the model may echo the candidate id as shown ("[c1]") or with stray whitespace.
+    candidates = {"s1": [_l3("c1"), _l3("c2")]}
+    picks = BatchedCapabilitySelection(
+        stages=[StageCapabilityPicks(stage_id="s1", capabilities=["[c1]", " c2 "])]
+    )
+    out = resolver.resolve_l3(picks, candidates)
+    assert [c.id for c in out["s1"]] == ["c1", "c2"]
+
+
 def test_resolve_l3_empty_picks_gives_no_capabilities():
     candidates = {"s1": [_l3("c1")]}
     out = resolver.resolve_l3(BatchedCapabilitySelection(stages=[]), candidates)

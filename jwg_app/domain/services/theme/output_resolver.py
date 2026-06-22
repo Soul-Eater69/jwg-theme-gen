@@ -77,9 +77,10 @@ def resolve_l3(
     resolved: dict[str, list[L3Capability]] = {}
     picks_by_stage: dict[str, list[str]] = {}
     for stage_id, candidates in candidates_by_stage.items():
-        chosen = by_stage[stage_id].capabilities if stage_id in by_stage else []
+        raw = by_stage[stage_id].capabilities if stage_id in by_stage else []
+        chosen = [_clean_id(c) for c in raw]  # the model may echo the id as ``[CAP…]``
         resolved[stage_id] = _keep_known_caps(chosen, candidates)
-        picks_by_stage[stage_id] = list(chosen)
+        picks_by_stage[stage_id] = chosen
 
     _reassign_misplaced(
         resolved,
@@ -126,6 +127,11 @@ def _keep_known_stages(
         seen.add(stage_id)
         out.append(_to_selected(by_id[stage_id], reason))
     return out
+
+
+def _clean_id(value: str) -> str:
+    """Normalize a model-returned id: drop surrounding brackets/whitespace (it may echo ``[CAP…]``)."""
+    return value.strip().strip("[]").strip()
 
 
 def _keep_known_caps(chosen: Sequence[str], candidates: Sequence[L3Capability]) -> list[L3Capability]:
