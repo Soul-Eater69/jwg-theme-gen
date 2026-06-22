@@ -187,6 +187,11 @@ class ThemeGenerationHandler:
             )
         business_needs = await self._business_needs_for_vs(er, vs, stages)
         l3 = [cap for stage in stages for cap in l3_by_stage.get(stage.stage_id, [])]
+        l2 = resolver.derive_l2(l3)
+        logger.info(
+            "theme assembled for %s: %d stage(s) %s, %d L3, %d L2",
+            vs.vs_id, len(stages), [s.stage_id for s in stages], len(l3), len(l2),
+        )
         return mapper.to_theme_worklet(
             theme_stub,
             title=f"{er.idmt_ticket_title} -- {vs.vs_name}",
@@ -194,7 +199,7 @@ class ThemeGenerationHandler:
             business_needs=business_needs,
             selected_stages=stages,
             l3=l3,
-            l2=resolver.derive_l2(l3),
+            l2=l2,
         )
 
     async def _description_body(self, er: ERContext) -> str:
@@ -316,13 +321,19 @@ class ThemeGenerationHandler:
             if stage_caps:
                 groups.append((vs, stage_caps))
         if not groups:
+            logger.info("capability selection: no selected stage has L3 candidates; skipping")
             return {}
         picks = await self._call(
             "capability_selection", BatchedCapabilitySelection,
             ticket_context=prompts.ticket_context(er),
             value_streams=prompts.capability_value_streams(groups),
         )
-        return resolver.resolve_l3(picks, candidates_by_stage)
+        resolved = resolver.resolve_l3(picks, candidates_by_stage)
+        logger.info(
+            "capability selection: %d stage(s) with candidates, %d L3 selected",
+            len(candidates_by_stage), sum(len(v) for v in resolved.values()),
+        )
+        return resolved
 
     async def _business_needs_for_vs(
         self, er: ERContext, vs: VSContext, stages: list[SelectedStage]
