@@ -30,8 +30,9 @@ async def run(
 ### How to construct it (dependency injection)
 
 - **`azure_sql_client`** → `ThemeService`, built by the DI provider `get_theme_service(session)`
-  (`jwg_app/interface/dependencies/theme.py`). It wires the five repositories to a SQLAlchemy
-  `AsyncSession` from `get_db_session`. It implements the `ThemeCatalogueReader` protocol:
+  (`jwg_app/interface/dependencies/theme.py`). It wires a `ValueStreamCatalogueRepository` to a
+  SQLAlchemy `AsyncSession` from `get_db_session`; the repository runs one projected join for the
+  whole catalogue and `ThemeService` assembles it. It implements the `ThemeCatalogueReader` protocol:
   `async def fetch_theme_inputs(vs_ids: Sequence[str]) -> dict[str, ValueStreamCatalogue]`.
 - **`platform_client`** → the prod `PlatformRestClient`
   (`jwg_app/infrastructure/external/platform_rest_client.py`). The handler calls its
@@ -65,7 +66,7 @@ That's all generation reads from the ER. Summary-derived fields are **not** used
 ### 2.2 THEME worklet stubs — input
 
 `run` takes the **list of THEME stubs** (one per approved value stream) and generates every theme in
-one call. From **each** stub, only the parent id is read:
+one call. From **each** stub, only the value-stream id is read:
 
 | Read (per stub) | Worklet field |
 | --- | --- |
@@ -112,19 +113,29 @@ aborts the whole request.
 | `404` | ER worklet or VS worklet not found (missing/empty input) |
 | `503` | Azure SQL service unavailable |
 | `503` | LLM service unavailable after retries (any of: description body/framing, stage selection, capabilities, a value stream's business needs) |
+| `503` | LLM output failed schema validation after retries |
 | `400` | A value stream resolved no stages (defensive; not expected for an approved value stream) |
 
 LLM retry (before a `503`): transient statuses `429, 502, 503, 504` are retried; `400/401/403/404/500`
-fail fast.
+fail fast. A 200 whose body fails schema validation is also retried (see §4).
 
 ---
 
-## 4. LLM retry (built in)
+## 4. LLM retry + strict output (built in)
 
-Transient gateway failures are retried automatically inside the handler - nothing to pass. Defaults
-(`RetryConfig` in `jwg_app/domain/services/theme/config.py`): 3 attempts, ~1s fixed delay + jitter
-(not exponential), retrying only `429, 502, 503, 504`. After the attempts are exhausted the call
-surfaces a `503`. To change the policy, edit the `RetryConfig` defaults.
+Nothing to pass - both are inside the handler:
+
+- **Strict structured output.** Every LLM call is sent with a strict `response_format` (constrained
+  decoding), so the model is forced to match the schema - it cannot rename, omit, or mistype a field.
+  Built from the call's schema; no config needed.
+- **Transport retry.** Transient gateway failures (`429, 502, 503, 504`) are retried; `400/401/403/
+  404/500` fail fast. Defaults (`RetryConfig` in `jwg_app/domain/services/theme/config.py`):
+  3 attempts, ~1s fixed delay + jitter (not exponential).
+- **Validation retry.** A `200` whose body does not match the schema (or is malformed JSON) is
+  re-sampled, up to the same attempt count, before surfacing a `503`. Strict output makes this rare;
+  it is the backstop for when the gateway does not honor strict.
+
+To change either policy, edit the `RetryConfig` defaults.
 
 ---
 
