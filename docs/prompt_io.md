@@ -256,6 +256,80 @@ Full worklet shape and field tables: see [api_integration.md](api_integration.md
 
 ---
 
+## Coverage analysis (ANALYSE) — not an LLM call
+
+Coverage is a **separate action** that runs **after** generation, and it is **not a prompt**: it is
+deterministic n-gram scoring (`text_evaluation.ngram_evaluation.NgramEvaluator`). It is included here
+because it is the other half of the theme-generation contract. Entry point:
+`CoverageAnalysisService.analyze_worklet(er_worklet, themes)`.
+
+**Input** — read off the worklets (no prompt, no model):
+
+| Read | From | Used as |
+| --- | --- | --- |
+| source text | ER worklet `rawText` property (only — no fallback) | the context to score against |
+| generated text | each theme's `description` + `Business Needs` properties | the text being scored |
+
+Internally it builds this evaluator dataset (the property names match the evaluator's existing
+contract — `acceptanceCriteria` for the source, `title`/`description` for the generated side; the
+theme's **Business Needs** is scored through the `title` slot and the theme **description** through
+the `description` slot):
+
+```json
+{
+  "context": [ { "propertyName": "acceptanceCriteria", "propertyValue": "<ER rawText>" } ],
+  "generated_text": [
+    [
+      { "propertyName": "title",       "propertyValue": "<theme 1 Business Needs>" },
+      { "propertyName": "description", "propertyValue": "<theme 1 description>" }
+    ]
+  ],
+  "n": 1, "remove_stopwords": true, "coverage_color": "green", "creativity_color": "orange"
+}
+```
+
+**Output** — the same ER worklet, with one `analysis` property attached (JSON-ready, list of two
+metrics):
+
+```json
+{
+  "propertyName": "analysis",
+  "propertyValue": [
+    {
+      "metric_name": "Coverage",
+      "metric_value": {
+        "score": 0.78,
+        "highlighted_text": "<span style='background-color: green'>...covered raw text...</span> ..."
+      }
+    },
+    {
+      "metric_name": "Creativity",
+      "metric_value": {
+        "score": 0.42,
+        "scores": [0.35, 0.50, 0.41],
+        "highlighted_text": [
+          [
+            { "propertyName": "title",       "propertyValue": "... <span style='background-color: orange'>new text</span>" },
+            { "propertyName": "description", "propertyValue": "..." }
+          ]
+        ]
+      }
+    }
+  ]
+}
+```
+
+- **Coverage** = one overall `score` + `highlighted_text` (the full raw text with covered spans
+  highlighted in green).
+- **Creativity** = overall `score`, plus `scores` (per-theme), plus `highlighted_text` (per-theme:
+  the generated title/description with not-grounded spans highlighted in orange).
+
+`Metric` objects are serialized to plain dicts automatically, so the property drops straight into the
+API response. Worklet-in / worklet-out: the ER's other properties are untouched; `analysis` is
+added (overwritten on a re-run).
+
+---
+
 ## Resolution — how picks are cleaned
 
 Both stage and capability picks are reconciled against the catalogue (the source of truth) in
