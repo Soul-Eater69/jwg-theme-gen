@@ -79,7 +79,7 @@ def resolve_l3(
     for stage_id, candidates in candidates_by_stage.items():
         chosen = by_stage[stage_id].capabilities if stage_id in by_stage else []
         resolved[stage_id] = _keep_known_caps(chosen, candidates)
-        picks_by_stage[stage_id] = [p.capability_id for p in chosen]
+        picks_by_stage[stage_id] = list(chosen)
 
     _reassign_misplaced(
         resolved,
@@ -128,13 +128,13 @@ def _keep_known_stages(
     return out
 
 
-def _keep_known_caps(chosen: Sequence, candidates: Sequence[L3Capability]) -> list[L3Capability]:
-    """Keep the picks that name a real candidate of this stage, deduped and marked selected."""
+def _keep_known_caps(chosen: Sequence[str], candidates: Sequence[L3Capability]) -> list[L3Capability]:
+    """Keep the ids that name a real candidate of this stage, deduped and marked selected."""
     by_id = {c.id: c for c in candidates}
     out: list[L3Capability] = []
     seen: set[str] = set()
-    for pick in chosen:
-        cap = by_id.get(pick.capability_id)
+    for cap_id in chosen:
+        cap = by_id.get(cap_id)
         if cap is None or cap.id in seen:
             continue
         seen.add(cap.id)

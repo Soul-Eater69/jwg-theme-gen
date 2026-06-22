@@ -123,15 +123,12 @@ class BatchedStageSelection(CamelModel):
     value_streams: List[VsStageSelection] = Field(default_factory=list)
 
 
-class CapabilityPick(CamelModel):
-    capability_id: str
-    name: str = ""
-    reason: str = ""
-
-
 class StageCapabilityPicks(CamelModel):
     stage_id: str
-    capabilities: List[CapabilityPick] = Field(default_factory=list)
+    # The chosen L3 capability ids only. Ids-only (not objects) so the model cannot omit the id - the
+    # id is the value, not a field of an object it could leave out. Name/reason are taken from the
+    # catalogue on resolve, so they are not requested here.
+    capabilities: List[str] = Field(default_factory=list)
 
 
 class BatchedCapabilitySelection(CamelModel):

@@ -3,7 +3,6 @@
 from jwg_app.domain.models.theme_generation import (
     BatchedCapabilitySelection,
     BatchedStageSelection,
-    CapabilityPick,
     L3Capability,
     SelectedStage,
     StageCapabilityPicks,
@@ -99,7 +98,7 @@ def test_resolve_stages_dedups_repeated_picks():
 def test_resolve_l3_keeps_known_and_marks_selected():
     candidates = {"s1": [_l3("c1"), _l3("c2")]}
     picks = BatchedCapabilitySelection(
-        stages=[StageCapabilityPicks(stage_id="s1", capabilities=[CapabilityPick(capability_id="c1")])]
+        stages=[StageCapabilityPicks(stage_id="s1", capabilities=["c1"])]
     )
     out = resolver.resolve_l3(picks, candidates)
     assert [c.id for c in out["s1"]] == ["c1"]
@@ -118,7 +117,7 @@ def test_resolve_l3_reassigns_misplaced_to_owner_stage():
         stages=[
             StageCapabilityPicks(
                 stage_id="s1",
-                capabilities=[CapabilityPick(capability_id="c1"), CapabilityPick(capability_id="c2")],  # c2 misplaced
+                capabilities=["c1", "c2"],  # c2 misplaced
             )
         ]
     )
@@ -133,7 +132,7 @@ def test_resolve_l3_dedups_repeated_picks():
         stages=[
             StageCapabilityPicks(
                 stage_id="s1",
-                capabilities=[CapabilityPick(capability_id="c1"), CapabilityPick(capability_id="c1")],
+                capabilities=["c1", "c1"],
             )
         ]
     )
