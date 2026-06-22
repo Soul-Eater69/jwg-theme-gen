@@ -25,6 +25,18 @@ class _Property:
         self.property_value = property_value
 
 
+def _name(prop: Any) -> Any:
+    if isinstance(prop, dict):
+        return prop.get("propertyName", prop.get("property_name"))
+    return getattr(prop, "property_name", None)
+
+
+def _value(prop: Any) -> Any:
+    if isinstance(prop, dict):
+        return prop.get("propertyValue", prop.get("property_value"))
+    return getattr(prop, "property_value", None)
+
+
 class Worklet:
     """Minimal stand-in for the prod Worklet envelope (the fields + property API the mapper uses)."""
 
@@ -46,14 +58,17 @@ class Worklet:
 
     def get_property_value(self, name: str) -> Any:
         for p in self.properties:
-            if getattr(p, "property_name", None) == name:
-                return p.property_value
+            if _name(p) == name:
+                return _value(p)
         return None
 
     def upsert_property(self, *, name: str, value: Any) -> None:
         for p in self.properties:
-            if getattr(p, "property_name", None) == name:
-                p.property_value = value
+            if _name(p) == name:
+                if isinstance(p, dict):
+                    p["propertyValue"] = value
+                else:
+                    p.property_value = value
                 return
         self.properties.append(_Property(name, value))
 

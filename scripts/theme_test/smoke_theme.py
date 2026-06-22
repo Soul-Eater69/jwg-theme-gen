@@ -42,7 +42,6 @@ from typing import Any, Dict, List, Optional, Tuple  # noqa: E402
 
 from worklet_data_api import Worklet  # noqa: E402  (stub)
 
-from jwg_app.domain.models.base import Property  # noqa: E402
 from jwg_app.domain.models.theme_generation import ValueStreamCatalogue  # noqa: E402
 from jwg_app.domain.services.theme import output_resolver as resolver  # noqa: E402
 from jwg_app.domain.services.theme import worklet_mapper as mapper  # noqa: E402
@@ -97,8 +96,10 @@ class _DebugPlatform:
 
 # --- worklet builders ----------------------------------------------------------------------
 
-def _prop(name: str, value: Any) -> Property:
-    return Property(property_name=name, property_value=value)
+def _prop(name: str, value: Any) -> Dict[str, Any]:
+    # The real Worklet validates each property into a PropertyObject; a {propertyName, propertyValue}
+    # dict is accepted, and the mapper reads either shape.
+    return {"propertyName": name, "propertyValue": value}
 
 
 def _load_raw_text(path: str) -> str:
@@ -117,6 +118,7 @@ def build_er_worklet(raw_text: str) -> Worklet:
     return Worklet(
         id=TICKET_ID,
         source_id=TICKET_ID,
+        worklet_type="ENGAGEMENT_REQUEST",
         properties=[
             _prop("title", "New physical asset procurement initiative"),
             _prop("rawText", raw_text),
@@ -126,7 +128,14 @@ def build_er_worklet(raw_text: str) -> Worklet:
 
 def build_theme_stubs() -> List[Worklet]:
     # THEME stubs: the valueStreamId property carries the VS id (the catalogue lookup key).
-    return [Worklet(properties=[_prop("valueStreamId", vs_id)]) for vs_id in VALUE_STREAMS]
+    return [
+        Worklet(
+            source_id=f"{TICKET_ID}-{vs_id}",
+            worklet_type="THEME",
+            properties=[_prop("valueStreamId", vs_id)],
+        )
+        for vs_id in VALUE_STREAMS
+    ]
 
 
 # --- run -----------------------------------------------------------------------------------
