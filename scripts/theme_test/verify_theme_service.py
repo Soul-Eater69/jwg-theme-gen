@@ -32,23 +32,10 @@ from typing import List  # noqa: E402
 from db_session import dispose, session_scope  # noqa: E402
 
 from jwg_app.domain.services.theme_service import ThemeService  # noqa: E402
-from jwg_app.infrastructure.repositories import (  # noqa: E402
-    L2CapabilityRepository,
-    L3CapabilityRepository,
-    ValueStreamCapabilityRepository,
-    ValueStreamRepository,
-    ValueStreamStageRepository,
-)
 
 
 def build_service(session) -> ThemeService:
-    return ThemeService(
-        value_stream_repository=ValueStreamRepository(session),
-        stage_repository=ValueStreamStageRepository(session),
-        capability_repository=ValueStreamCapabilityRepository(session),
-        l3_repository=L3CapabilityRepository(session),
-        l2_repository=L2CapabilityRepository(session),
-    )
+    return ThemeService(session=session)
 
 
 async def main(vs_ids: List[str]) -> None:

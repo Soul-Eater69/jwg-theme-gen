@@ -237,21 +237,8 @@ def _build_real_platform():
 
 def _build_real_service(session):
     from jwg_app.domain.services.theme_service import ThemeService
-    from jwg_app.infrastructure.repositories import (
-        L2CapabilityRepository,
-        L3CapabilityRepository,
-        ValueStreamCapabilityRepository,
-        ValueStreamRepository,
-        ValueStreamStageRepository,
-    )
 
-    return ThemeService(
-        value_stream_repository=ValueStreamRepository(session),
-        stage_repository=ValueStreamStageRepository(session),
-        capability_repository=ValueStreamCapabilityRepository(session),
-        l3_repository=L3CapabilityRepository(session),
-        l2_repository=L2CapabilityRepository(session),
-    )
+    return ThemeService(session=session)
 
 
 async def main(args: argparse.Namespace) -> None:
