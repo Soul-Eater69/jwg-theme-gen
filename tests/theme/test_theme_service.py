@@ -13,7 +13,7 @@ from jwg_app.domain.services.theme_service import ThemeService
 # the labels the catalogue query selects; assembly reads rows by these names.
 _FIELDS = (
     "vs_id", "vs_name", "vs_description", "vs_value_proposition", "vs_trigger",
-    "map_stage_id", "stage_id", "stage_name", "stage_description", "stage_entrance", "stage_exit",
+    "stage_id", "stage_name", "stage_description", "stage_entrance", "stage_exit",
     "l3_id", "l3_name", "l3_description", "level_two_id", "level_two_name",
 )
 
@@ -46,12 +46,12 @@ def test_assembles_full_chain():
     rows = [
         _row(vs_id="vs1", vs_name="Procurement", vs_description="VS desc",
              vs_value_proposition="VP", vs_trigger="TR",
-             map_stage_id="st1", stage_id="st1", stage_name="Stage One",
+             stage_id="st1", stage_name="Stage One",
              stage_description="D", stage_entrance="E", stage_exit="X",
              l3_id="c1", l3_name="Cap1", l3_description="cd", level_two_id="L2a", level_two_name="L2 A"),
         _row(vs_id="vs1", vs_name="Procurement", vs_description="VS desc",
              vs_value_proposition="VP", vs_trigger="TR",
-             map_stage_id="st1", stage_id="st1", stage_name="Stage One",
+             stage_id="st1", stage_name="Stage One",
              stage_description="D", stage_entrance="E", stage_exit="X",
              l3_id="c2", l3_name="Cap2", l3_description="cd", level_two_id="L2b", level_two_name="L2 B"),
     ]
@@ -88,9 +88,9 @@ def test_value_stream_with_no_mappings_has_attributes_but_empty_lists():
 def test_inactive_capability_is_skipped():
     # the L3 join did not match (inactive/missing) -> l3 columns null.
     rows = [
-        _row(vs_id="vs1", map_stage_id="st1", stage_id="st1", stage_name="S",
+        _row(vs_id="vs1", stage_id="st1", stage_name="S",
              l3_id="c1", l3_name="Cap1", level_two_id="L2a", level_two_name="L2 A"),
-        _row(vs_id="vs1", map_stage_id="st1", stage_id="st1", stage_name="S",
+        _row(vs_id="vs1", stage_id="st1", stage_name="S",
              l3_id=None),  # capability inactive -> no L3
     ]
     cat = _fetch(rows, ["vs1"])["vs1"]
@@ -98,27 +98,28 @@ def test_inactive_capability_is_skipped():
 
 
 def test_l3_with_missing_l2_parent_has_empty_name():
-    rows = [_row(vs_id="vs1", map_stage_id="st1", stage_id="st1", stage_name="S",
+    rows = [_row(vs_id="vs1", stage_id="st1", stage_name="S",
                  l3_id="c1", level_two_id="L2missing", level_two_name=None)]
     cat = _fetch(rows, ["vs1"])["vs1"]
     assert cat.l3_capabilities[0].level_two_name == ""
 
 
-def test_inactive_stage_is_skipped_but_its_capability_is_kept():
-    # the stage join did not match (inactive) -> stage_id null; the L3 still has the mapping stage.
+def test_inactive_stage_drops_its_stage_and_capability():
+    # the stage join did not match (inactive) -> stage_id null; its L3 is dropped too, since an L3
+    # under an inactive stage can never be a candidate (selected stages are active ones).
     rows = [
-        _row(vs_id="vs1", map_stage_id="st1", stage_id="st1", stage_name="S", l3_id="c1"),
-        _row(vs_id="vs1", map_stage_id="ghost", stage_id=None, l3_id="c2"),  # stage inactive
+        _row(vs_id="vs1", stage_id="st1", stage_name="S", l3_id="c1"),
+        _row(vs_id="vs1", stage_id=None, l3_id="c2"),  # stage inactive -> stage + c2 dropped
     ]
     cat = _fetch(rows, ["vs1"])["vs1"]
     assert [s.stage_id for s in cat.stage_list] == ["st1"]
-    assert {c.id for c in cat.l3_capabilities} == {"c1", "c2"}
+    assert {c.id for c in cat.l3_capabilities} == {"c1"}
 
 
 def test_dedups_repeated_l3_under_same_stage():
     rows = [
-        _row(vs_id="vs1", map_stage_id="st1", stage_id="st1", stage_name="S", l3_id="c1"),
-        _row(vs_id="vs1", map_stage_id="st1", stage_id="st1", stage_name="S", l3_id="c1"),
+        _row(vs_id="vs1", stage_id="st1", stage_name="S", l3_id="c1"),
+        _row(vs_id="vs1", stage_id="st1", stage_name="S", l3_id="c1"),
     ]
     cat = _fetch(rows, ["vs1"])["vs1"]
     assert [c.id for c in cat.l3_capabilities] == ["c1"]

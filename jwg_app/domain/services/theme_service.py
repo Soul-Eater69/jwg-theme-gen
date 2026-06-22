@@ -95,9 +95,10 @@ class ThemeService:
                     )
                 )
 
-            # One L3 per (mapping stage, capability), tied to the mapping's stage id.
-            if r.l3_id and r.map_stage_id:
-                key = (r.map_stage_id, r.l3_id)
+            # One L3 per (stage, capability), tied to its active stage. (L3 under an inactive stage
+            # is dropped here - it can never be a candidate, since selected stages are active ones.)
+            if r.l3_id and r.stage_id:
+                key = (r.stage_id, r.l3_id)
                 if key not in l3_seen[r.vs_id]:
                     l3_seen[r.vs_id].add(key)
                     cat.l3_capabilities.append(
@@ -105,7 +106,7 @@ class ThemeService:
                             id=r.l3_id,
                             name=r.l3_name or "",
                             description=r.l3_description or "",
-                            stage_id=r.map_stage_id,
+                            stage_id=r.stage_id,
                             level_two_id=r.level_two_id or "",
                             level_two_name=r.level_two_name or "",
                         )
@@ -135,7 +136,6 @@ class ThemeService:
                 ValueStreamModel.value_stream_description.label("vs_description"),
                 ValueStreamModel.value_stream_value_proposition.label("vs_value_proposition"),
                 ValueStreamModel.value_stream_trigger.label("vs_trigger"),
-                ValueStreamCapabilityModel.value_stream_stage_id.label("map_stage_id"),
                 ValueStreamStageModel.value_stream_stage_id.label("stage_id"),
                 ValueStreamStageModel.value_stream_stage_name.label("stage_name"),
                 ValueStreamStageModel.value_stream_stage_description.label("stage_description"),
