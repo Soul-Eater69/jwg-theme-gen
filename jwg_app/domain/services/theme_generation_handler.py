@@ -195,6 +195,7 @@ class ThemeGenerationHandler:
         )
         return mapper.to_theme_worklet(
             theme_stub,
+            vs=vs,
             title=f"{er.idmt_ticket_title} -- {vs.vs_name}",
             description=self._theme_description(framings.get(vs.vs_id, ""), body),
             business_needs=business_needs,

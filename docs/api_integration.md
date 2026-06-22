@@ -86,6 +86,11 @@ Attached properties:
 
 | Property name | Value |
 | --- | --- |
+| `valueStreamId` | the VS id (catalogue key) |
+| `valueStreamName` | the VS name (from the catalogue) |
+| `valueStreamDescription` | the VS description (from the catalogue) |
+| `valueProposition` | the VS value proposition (from the catalogue) |
+| `trigger` | the VS trigger (from the catalogue) |
 | `title` | `"<ticket title> -- <value stream name>"` |
 | `description` | the value stream's framing paragraph over the shared body |
 | `Business Needs` | the Business Needs document (text; structure is inside the text) |

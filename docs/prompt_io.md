@@ -244,6 +244,7 @@ The five calls' outputs are attached onto each incoming THEME stub (one per valu
 
 | Property | From |
 | --- | --- |
+| `valueStreamId` / `valueStreamName` / `valueStreamDescription` / `valueProposition` / `trigger` | the VS catalogue attributes (carried onto the theme) |
 | `title` | `"<ticket title> -- <vs name>"` |
 | `description` | framing paragraph (call 2) + shared body (call 1) |
 | `Business Needs` | call 5 |
