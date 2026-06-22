@@ -237,8 +237,9 @@ def _build_real_platform():
 
 def _build_real_service(session):
     from jwg_app.domain.services.theme_service import ThemeService
+    from jwg_app.infrastructure.repositories import ValueStreamCatalogueRepository
 
-    return ThemeService(session=session)
+    return ThemeService(catalogue_repository=ValueStreamCatalogueRepository(session))
 
 
 async def main(args: argparse.Namespace) -> None:

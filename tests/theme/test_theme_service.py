@@ -22,24 +22,18 @@ def _row(**kw):
     return SimpleNamespace(**{f: kw.get(f) for f in _FIELDS})
 
 
-class _FakeResult:
+class _FakeCatalogueRepo:
     def __init__(self, rows):
         self._rows = rows
 
-    def all(self):
+    async def get_catalogue_rows(self, _ids):
         return self._rows
 
 
-class _FakeSession:
-    def __init__(self, rows):
-        self._rows = rows
-
-    async def execute(self, _stmt):
-        return _FakeResult(self._rows)
-
-
 def _fetch(rows, ids):
-    return asyncio.run(ThemeService(session=_FakeSession(rows)).fetch_theme_inputs(ids))
+    return asyncio.run(
+        ThemeService(catalogue_repository=_FakeCatalogueRepo(rows)).fetch_theme_inputs(ids)
+    )
 
 
 def test_assembles_full_chain():

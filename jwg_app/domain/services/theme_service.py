@@ -1,20 +1,13 @@
 """Service layer that assembles the value-stream catalogue for theme generation.
 
-Reads, for each approved value stream, its catalogue - attributes, candidate stages, and L3
-capabilities (each carrying its parent L2 name) - in a SINGLE projected join across the value
-stream, the stage<->capability mapping, the stage table, and the L3/L2 capability tables. Only the
-columns theme generation uses are selected, and only active rows. This is the concrete
-ThemeCatalogueReader the theme generation handler depends on.
-
-A stage and an L3 are tied to a value stream only through the mapping table; the mapping's
-capability_id is an L3 id, and L2 is reached via L3.parent_capability_id.
+Maps the joined catalogue rows (read by ValueStreamCatalogueRepository in one query) into, for each
+approved value stream, its catalogue: attributes, candidate stages, and L3 capabilities (each
+carrying its parent L2 name). The repository owns the SQL/join; this service owns the grouping and
+dedup. This is the concrete ThemeCatalogueReader the theme generation handler depends on.
 """
 
 import logging
-from typing import Dict, List, Sequence
-
-from sqlalchemy import Select, and_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Dict, Sequence
 
 from jwg_app.domain.models.theme_generation import (
     L3Capability,
@@ -22,34 +15,28 @@ from jwg_app.domain.models.theme_generation import (
     ValueStreamAttributes,
     ValueStreamCatalogue,
 )
-from jwg_app.infrastructure.database.models import (
-    L2CapabilityModel,
-    L3CapabilityModel,
-    ValueStreamCapabilityModel,
-    ValueStreamModel,
-    ValueStreamStageModel,
+from jwg_app.infrastructure.repositories.value_stream_catalogue_repository import (
+    ValueStreamCatalogueRepository,
 )
 
 logger = logging.getLogger(__name__)
 
-_ACTIVE = "yes"
-
 
 class ThemeService:
-    """Assembles the theme-generation catalogue for approved value streams in one joined read."""
+    """Assembles the theme-generation catalogue for approved value streams from the joined rows."""
 
-    def __init__(self, session: AsyncSession):
-        """Initialize with the database session the catalogue join runs on.
+    def __init__(self, catalogue_repository: ValueStreamCatalogueRepository):
+        """Initialize with the catalogue read repository.
 
         Args:
-            session: SQLAlchemy async session.
+            catalogue_repository: Runs the single catalogue join and returns the rows.
         """
-        self.session = session
+        self.catalogue_repository = catalogue_repository
 
     async def fetch_theme_inputs(
         self, vs_ids: Sequence[str]
     ) -> Dict[str, ValueStreamCatalogue]:
-        """Read the catalogue for every approved value stream in one joined, projected query.
+        """Read and assemble the catalogue for every approved value stream.
 
         Args:
             vs_ids: The approved value-stream ids to read.
@@ -62,7 +49,7 @@ class ThemeService:
         if not ids:
             return {}
 
-        rows = (await self.session.execute(self._catalogue_query(ids))).all()
+        rows = await self.catalogue_repository.get_catalogue_rows(ids)
 
         catalogue: Dict[str, ValueStreamCatalogue] = {}
         stage_seen: Dict[str, set] = {}
@@ -120,62 +107,3 @@ class ThemeService:
         if missing:
             logger.info(f"Catalogue: {len(missing)} value stream(s) not found/inactive: {missing}")
         return catalogue
-
-    @staticmethod
-    def _catalogue_query(ids: List[str]) -> Select:
-        """One projected join: value stream -> mapping -> stage + L3 (+ parent L2), active rows only.
-
-        Outer joins from the value stream out, so an approved value stream with no (or only inactive)
-        mappings still returns - its stage/L3 columns come back null and become empty lists. Only the
-        columns theme generation uses are selected.
-        """
-        return (
-            select(
-                ValueStreamModel.value_stream_id.label("vs_id"),
-                ValueStreamModel.value_stream_name.label("vs_name"),
-                ValueStreamModel.value_stream_description.label("vs_description"),
-                ValueStreamModel.value_stream_value_proposition.label("vs_value_proposition"),
-                ValueStreamModel.value_stream_trigger.label("vs_trigger"),
-                ValueStreamStageModel.value_stream_stage_id.label("stage_id"),
-                ValueStreamStageModel.value_stream_stage_name.label("stage_name"),
-                ValueStreamStageModel.value_stream_stage_description.label("stage_description"),
-                ValueStreamStageModel.value_stream_stage_entrance_criteria.label("stage_entrance"),
-                ValueStreamStageModel.value_stream_stage_exit_criteria.label("stage_exit"),
-                L3CapabilityModel.l3_capability_id.label("l3_id"),
-                L3CapabilityModel.capability_name.label("l3_name"),
-                L3CapabilityModel.capability_description.label("l3_description"),
-                L3CapabilityModel.parent_capability_id.label("level_two_id"),
-                L2CapabilityModel.capability_name.label("level_two_name"),
-            )
-            .select_from(ValueStreamModel)
-            .outerjoin(
-                ValueStreamCapabilityModel,
-                ValueStreamCapabilityModel.value_stream_id == ValueStreamModel.value_stream_id,
-            )
-            .outerjoin(
-                ValueStreamStageModel,
-                and_(
-                    ValueStreamStageModel.value_stream_stage_id
-                    == ValueStreamCapabilityModel.value_stream_stage_id,
-                    ValueStreamStageModel.value_stream_stage_active == _ACTIVE,
-                ),
-            )
-            .outerjoin(
-                L3CapabilityModel,
-                and_(
-                    L3CapabilityModel.l3_capability_id == ValueStreamCapabilityModel.capability_id,
-                    L3CapabilityModel.capability_active == _ACTIVE,
-                ),
-            )
-            .outerjoin(
-                L2CapabilityModel,
-                and_(
-                    L2CapabilityModel.l2_capability_id == L3CapabilityModel.parent_capability_id,
-                    L2CapabilityModel.capability_active == _ACTIVE,
-                ),
-            )
-            .where(
-                ValueStreamModel.value_stream_id.in_(ids),
-                ValueStreamModel.value_stream_active == _ACTIVE,
-            )
-        )
