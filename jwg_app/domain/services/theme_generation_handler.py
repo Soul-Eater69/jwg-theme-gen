@@ -47,6 +47,7 @@ from jwg_app.domain.services.theme import prompt_builder as prompts
 from jwg_app.domain.services.theme import worklet_mapper as mapper
 from jwg_app.domain.services.theme.config import ThemeGenerationConfig
 from jwg_app.domain.services.utils import load_config
+from jwg_app.infrastructure.external.strict_schema import strict_response_format
 
 logger = logging.getLogger(__name__)
 
@@ -411,12 +412,20 @@ class ThemeGenerationHandler:
         """
         retry = self._retry
         max_attempts = retry.attempts()
+        # Force strict (constrained) structured output: pass a strict response_format in model_params.
+        # agenerate merges model_params into the request last, so this overrides its default
+        # (non-strict) response_format - no platform-client change needed. Strict decoding makes the
+        # model match the schema exactly (no renamed/missing fields, no objects where a value is due).
+        model_params = {
+            **(self._usecase.get("model_params") or {}),
+            "response_format": strict_response_format(schema),
+        }
         data = error = status_code = None
         for attempt in range(1, max_attempts + 1):
             logger.debug("calling LLM for %s (attempt %d/%d)", key, attempt, max_attempts)
             data, error, status_code = await self._platform.agenerate(
                 message=messages,
-                model_params=self._usecase.get("model_params"),
+                model_params=model_params,
                 output_function=schema,
             )
             succeeded = not error and status_code == 200 and data is not None
