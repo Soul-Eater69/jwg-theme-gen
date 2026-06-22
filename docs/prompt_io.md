@@ -1,186 +1,271 @@
-# Theme Generation — Prompt Inputs & Outputs
+# Theme Generation — Prompt I/O Contract
 
-Exactly what each LLM call sends and what it returns. There are **5 prompts**; with N approved value
-streams the handler makes **4 + N** calls (business needs runs once per value stream, the rest are
-single batched calls). Every prompt also receives the **ticket context** = the raw ticket text only
-("raw to decide"); summary-derived fields are not sent.
+What goes **into** each LLM call and what comes **out**, with a concrete example of the rendered
+prompt for every call. This is the contract view: the inputs are built by
+`jwg_app/domain/services/theme/prompt_builder.py` from the engagement-request + the SQL catalogue, the
+prompt text lives in `configs/user_config.yaml`, and each output is a pydantic schema in
+`jwg_app/domain/models/theme_generation.py`.
 
-Wire format is camelCase (pydantic `CamelModel`); fields are snake_case in Python. Output schemas are
-passed to the gateway as structured-output (`json_schema`) so the reply validates against the model.
+Two ground rules that apply to every call:
 
-Order of calls:
+- **Grounding is the raw ticket text only.** Every prompt's `ticket_context` is just
+  `- content: <rawText>`. Summary-derived fields are not sent.
+- **Structured output is strict.** Each call passes its schema as a strict `response_format`
+  (constrained decoding), so the model must return exactly that shape.
 
-```
-CORE phase (batched, all value streams):
-  Step 1 (parallel):  description_body | description_framing | stage_selection
-  Step 2:             capability_selection (one merged call)
-
-PER-VS phase (one per value stream, in parallel):
-  for each value stream:  business_needs  ->  assemble THEME worklet (no LLM; L2 derived from L3)
-```
-
-Generation is all-or-nothing: every value stream is attempted (each call retried), and if any fails
-the whole request raises `CustomException` (no partial result). See [worklet_contract.md]
-"Failure handling".
+For one engagement request with **N** approved value streams, theme generation makes **4 + N** LLM
+calls: description body (1), framing (1), stage selection (1), capability selection (1), and business
+needs (N, one per value stream).
 
 ---
 
-## 1. description_body  (1 call, value-stream-agnostic)
+## Shared example data
 
-The shared description body, generated once and reused by every theme for the ticket.
+All examples below use this one ticket and one value stream:
 
-**Send**
+```
+rawText : "The plan must onboard CareWay+ commercial members, adjudicate their
+           claims, and price provider services for the new fiscal year."
+title   : "CareWay+ commercial claims activation"
 
-| Variable | Content |
-| --- | --- |
-| `ticket_context` | `- content: <raw ticket text>` |
+Value stream  VSR00074584  "Claims Adjudication"
+  description       : Adjudicate and price member and provider claims
+  value proposition : Accurate, timely claim adjudication and pricing
+  trigger           : A claim is submitted
 
-**Get back** — `TextOut`
+  catalogue stages
+    VSS00074614  Eligibility Determination   (entrance: claim registered | exit: eligibility decided)
+    VSS00074613  Benefit Determination       (entrance: eligibility decided | exit: benefit priced)
+
+  catalogue L3 (under Eligibility Determination)
+    CAP00000097  Eligibility Determination   -> L2  CAP00000036  Claim Adjudication
+```
+
+---
+
+## 1. Description body — `TextOut`
+
+The VS-agnostic body of the Theme description, written once for the ticket and reused under every
+value stream's theme.
+
+**Input** — `ticket_context` only (no value stream; the body is shared).
+
+**Rendered prompt** (user message):
+
+```
+Ticket context:
+- content: The plan must onboard CareWay+ commercial members, adjudicate their
+  claims, and price provider services for the new fiscal year.
+```
+
+**Output schema** `TextOut`:
 
 ```json
-{ "text": "<the shared description body>" }
+{ "text": "<the shared description body paragraph(s)>" }
 ```
 
 ---
 
-## 2. description_framing  (1 call, all value streams)
+## 2. Description framing — `FramingsOut`
 
-One opening paragraph per value stream — how the idea shows up through that value stream's lens.
+One opening paragraph **per value stream**, prepended to the shared body to make each theme's
+description value-stream specific.
 
-**Send**
+**Input** — `ticket_context` + `value_streams` (id, name, description, value proposition, trigger).
 
-| Variable | Content |
-| --- | --- |
-| `ticket_context` | raw ticket text |
-| `value_streams` | per VS: `valueStreamId`, `valueStreamName`, `valueStreamDescription`, `valueProposition`, `trigger` |
+**Rendered prompt**:
 
-**Get back** — `FramingsOut`
+```
+Ticket context:
+- content: The plan must onboard CareWay+ commercial members, adjudicate their
+  claims, and price provider services for the new fiscal year.
+
+Approved value streams:
+- valueStreamId: VSR00074584
+  valueStreamName: Claims Adjudication
+  valueStreamDescription: Adjudicate and price member and provider claims
+  valueProposition: Accurate, timely claim adjudication and pricing
+  trigger: A claim is submitted
+```
+
+**Output schema** `FramingsOut` — one entry per value stream:
 
 ```json
 {
   "framings": [
-    { "valueStreamId": "VSR00074583", "text": "<framing paragraph>" }
+    { "valueStreamId": "VSR00074584", "text": "<framing paragraph for this VS>" }
   ]
 }
 ```
 
-A value stream the model omits simply has no framing (its description still gets the shared body).
+The final `description` property = `<framing paragraph>` + the shared body from call 1.
 
 ---
 
-## 3. stage_selection  (1 call, all value streams)
+## 3. Stage selection — `BatchedStageSelection`
 
-Selects which lifecycle stages of each value stream apply to this ticket.
+Selects, for **every** value stream at once, which of its catalogue stages the work runs through.
+Each selected stage becomes a Jira Epic.
 
-**Send**
+**Input** — `ticket_context` + `value_streams`, each VS rendered with its **candidate stages**.
 
-| Variable | Content |
-| --- | --- |
-| `ticket_context` | raw ticket text |
-| `value_streams` | per VS header: `id`, `name`, `description`, `value proposition`, `trigger`; then its **candidate stages**, each: `id`, `name`, `description`, `entrance`, `exit` |
+**Rendered prompt**:
 
-**Get back** — `BatchedStageSelection`
+```
+## Ticket context
+- content: The plan must onboard CareWay+ commercial members, adjudicate their
+  claims, and price provider services for the new fiscal year.
+
+
+## Approved value streams (each with its own candidate stages)
+## Value Stream VSR00074584
+Name: Claims Adjudication
+Description: Adjudicate and price member and provider claims
+Value proposition: Accurate, timely claim adjudication and pricing
+Trigger: A claim is submitted
+Candidate stages:
+[VSS00074614] Eligibility Determination
+Description: Determine member eligibility for the claim
+Entrance: claim registered | Exit: eligibility decided
+[VSS00074613] Benefit Determination
+Description: Determine and price the benefit
+Entrance: eligibility decided | Exit: benefit priced
+```
+
+**Output schema** `BatchedStageSelection` — picks keyed by `valueStreamId`:
 
 ```json
 {
   "valueStreams": [
     {
-      "valueStreamId": "VSR00074583",
+      "valueStreamId": "VSR00074584",
       "selectedStages": [
-        { "stageId": "VSS00074679", "stageName": "Approve Request" }
+        { "stageId": "VSS00074614", "stageName": "Eligibility Determination" }
       ]
     }
   ]
 }
 ```
 
-The model emits `stageId` + `stageName` (echo). On resolve we keep only the value
-stream's own stage ids, **overwrite the name** with the canonical catalogue name, and **fill the
-scope** (`stageDescription`, `entranceCriteria`, `exitCriteria`) from the catalogue. Empty / all-invalid
-picks fall back to all of that value stream's stages; a stage placed under the wrong value stream is
-moved back to its owner.
+The model returns `stageId` (+ echoes `stageName`). On resolve we keep only ids that belong to the
+value stream, **overwrite the name + fill the scope** from the catalogue, drop unknown ids, move a
+stage placed under the wrong value stream back to its owner, and — if a VS got no valid pick — fall
+back to all of its stages (never empty). See [resolve internals](#resolution-how-picks-are-cleaned).
 
 ---
 
-## 4. capability_selection  (1 merged call, all value streams)
+## 4. Capability selection — `BatchedCapabilitySelection`
 
-Selects the L3 business capabilities for every selected stage, in one call.
+Selects the L3 business capabilities for **every selected stage** at once. The value stream is shown
+as context, but picks come back keyed by **stage**, not value stream.
 
-**Send**
+**Input** — `ticket_context` + `value_streams`, each VS rendered with its **selected stages** and,
+under each stage, that stage's **candidate L3 capabilities**.
 
-| Variable | Content |
-| --- | --- |
-| `ticket_context` | raw ticket text |
-| `value_streams` | per VS header: `id`, `name`, `description`, `value proposition`, `trigger`; then per **selected stage**: `id`, `name`, `description`; then that stage's **candidate L3**, each: `[id] name - description (L2: parentName)` |
+**Rendered prompt**:
 
-**Get back** — `BatchedCapabilitySelection`
+```
+## Ticket context
+- content: The plan must onboard CareWay+ commercial members, adjudicate their
+  claims, and price provider services for the new fiscal year.
+
+## Approved value streams, each with its selected stages and each stage's own candidate L3
+## Value Stream VSR00074584
+Name: Claims Adjudication
+Description: Adjudicate and price member and provider claims
+Value proposition: Accurate, timely claim adjudication and pricing
+Trigger: A claim is submitted
+
+### Stage VSS00074614: Eligibility Determination
+Description: Determine member eligibility for the claim
+Candidate L3 capabilities (choose by id; each shows its parent L2):
+[CAP00000097] Eligibility Determination - Verify member eligibility (L2: Claim Adjudication)
+```
+
+**Output schema** `BatchedCapabilitySelection` — picks keyed by `stageId`:
 
 ```json
 {
   "stages": [
     {
-      "stageId": "VSS00074679",
+      "stageId": "VSS00074614",
       "capabilities": [
-        { "capabilityId": "CAP00000588", "name": "Physical Asset Order Management", "reason": "<why>" }
+        { "id": "CAP00000097", "name": "Eligibility Determination" }
       ]
     }
   ]
 }
 ```
 
-The model picks by `capabilityId`. On resolve we keep only ids governed for that stage (the canonical
-record), mark them selected, and move a capability placed under the wrong stage back to its owner.
-**L2 is derived, not generated** (`derive_l2`): the unique parent L2 of the selected L3 — no LLM call.
+The model returns each pick as `{ id, name }` (it varies the id key — `id` / `capabilityId` — both
+accepted). On resolve we keep only ids that are real candidates of that stage, take name/description/
+L2 from the catalogue, drop unknown ids, and move a capability placed under the wrong stage back to
+its owner. L2 is then **derived in code** (no LLM) from the selected L3.
 
 ---
 
-## 5. business_needs  (1 call PER value stream)
+## 5. Business needs — `TextOut` (one call per value stream)
 
-The detailed Business Needs document for one value stream's selected stages. Runs once per value
-stream (in parallel).
+Writes the Business Needs document for **one** value stream, scoped to its selected stages. Runs once
+per approved value stream.
 
-**Send**
+**Input** — `ticket_context` + that value stream's attributes + its `selected_stages` (with scope).
 
-| Variable | Content |
-| --- | --- |
-| `ticket_context` | raw ticket text |
-| `value_stream_id` | the VS id |
-| `value_stream_name` | the VS name |
-| `value_stream_description` | the VS description |
-| `value_proposition` | the VS value proposition |
-| `selected_stages` | per selected stage: `[id] name`, `Description`, `Entrance \| Exit` |
+**Rendered prompt**:
 
-(No `trigger` here — it is sent to framing / stage / capability prompts only.)
+```
+## Approved value stream
+ID: VSR00074584
+Name: Claims Adjudication
+Description: Adjudicate and price member and provider claims
+Value proposition: Accurate, timely claim adjudication and pricing
 
-**Get back** — `TextOut`
+## Selected stages (write needs for these stages only)
+[VSS00074614] Eligibility Determination
+  Description: Determine member eligibility for the claim
+  Entrance: claim registered | Exit: eligibility decided
 
-```json
-{ "text": "<Business Needs document; sections live inside the text>" }
+## Ticket context
+- content: The plan must onboard CareWay+ commercial members, adjudicate their
+  claims, and price provider services for the new fiscal year.
 ```
 
-The structure (Value Stage / Business Product Feature / numbered needs / Operational Training /
-Reporting) is inside the text, not separate JSON fields. Sections with no grounded evidence are omitted.
+**Output schema** `TextOut`:
+
+```json
+{ "text": "<the Business Needs document for this value stream>" }
+```
 
 ---
 
-## What is NOT an LLM call
+## Final assembly — the THEME worklet
 
-- **L2 capabilities** — derived from the selected L3 (`derive_l2`), one per distinct parent.
-- **Theme title** — `"<ticket title> -- <value stream name>"`, assembled in the handler.
-- **Theme description** — the value stream's framing paragraph over the shared body, assembled in the handler.
+The five calls' outputs are attached onto each incoming THEME stub (one per value stream):
+
+| Property | From |
+| --- | --- |
+| `title` | `"<ticket title> -- <vs name>"` |
+| `description` | framing paragraph (call 2) + shared body (call 1) |
+| `Business Needs` | call 5 |
+| `selectedStages` | call 3, resolved against the catalogue |
+| `L3 Business Capability` | call 4, resolved against the catalogue |
+| `L2 Business Capability` | derived in code from the selected L3 |
+
+Full worklet shape and field tables: see [api_integration.md](api_integration.md) and
+[worklet_contract.md](worklet_contract.md).
 
 ---
 
-## Field summary (per prompt)
+## Resolution — how picks are cleaned
 
-`✓` = sent. Raw ticket text goes to every prompt.
+Both stage and capability picks are reconciled against the catalogue (the source of truth) in
+`output_resolver.py`. The model says *which* ids it wants; the catalogue decides *where each belongs*
+and *what its canonical name/scope are*:
 
-| Field | body | framing | stages | caps | needs |
-| --- | :--: | :--: | :--: | :--: | :--: |
-| VS id / name / description | — | ✓ | ✓ | ✓ | ✓ |
-| VS value proposition | — | ✓ | ✓ | ✓ | ✓ |
-| VS trigger | — | ✓ | ✓ | ✓ | — |
-| candidate stages (id, name, desc, entrance, exit) | — | — | ✓ | — | — |
-| selected stages (id, name) | — | — | — | ✓ | ✓ |
-| selected stage scope (desc, entrance, exit) | — | — | — | desc only | ✓ |
-| candidate L3 (id, name, desc, parent L2 name) | — | — | — | ✓ | — |
+- **Filter** — keep only ids that are real candidates of that parent (VS for stages, stage for caps).
+- **Canonicalize** — name and scope come from the catalogue record, not the model's echo.
+- **Reassign** — an id filed under the wrong parent is moved to its real parent (one level each:
+  stage↔VS, then cap↔stage).
+- **Drop** — an id in no catalogue is discarded.
+- **Stage-only fallback** — a VS with no valid stage pick gets all its stages (never empty);
+  capabilities have no fallback (a stage may end up with none).
