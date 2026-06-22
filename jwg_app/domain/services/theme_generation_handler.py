@@ -25,7 +25,7 @@ import logging
 import random
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from worklet_data_api import Worklet
 
 from jwg_app.domain.exceptions.custom_exception import CustomException
@@ -383,23 +383,41 @@ class ThemeGenerationHandler:
 
         Raises:
             CustomException: 503 if the LLM gateway still fails after retries, returns a non-200
-                status, or returns no data.
+                status or no data, or the output fails schema validation on every attempt.
         """
         prompt = self._usecase["prompt"][key]
         messages = [
             {"role": "system", "content": prompt["system_role"]},
             {"role": "user", "content": prompt["static_prompt"].format(**values)},
         ]
-        data, error, status_code = await self._agenerate_with_retry(key, messages, schema)
-        if error or status_code != 200 or data is None:
-            reason = error or "no data returned"
-            logger.error("LLM call %s failed (status=%s): %s", key, status_code, reason)
-            raise CustomException(
-                status_code=503, detail=f"LLM service unavailable: {reason}"
-            )
-        if isinstance(data, str):  # structured output returned as a JSON string
-            data = json.loads(data)
-        return schema.model_validate(data)
+        # Validation retry: a 200 whose body does not match the schema is re-sampled (the gateway
+        # retries transient failures internally; this re-tries a bad/malformed structured output).
+        attempts = self._retry.attempts()
+        for attempt in range(1, attempts + 1):
+            data, error, status_code = await self._agenerate_with_retry(key, messages, schema)
+            if error or status_code != 200 or data is None:
+                reason = error or "no data returned"
+                logger.error("LLM call %s failed (status=%s): %s", key, status_code, reason)
+                raise CustomException(
+                    status_code=503, detail=f"LLM service unavailable: {reason}"
+                )
+            try:
+                payload = json.loads(data) if isinstance(data, str) else data
+                return schema.model_validate(payload)
+            except (ValidationError, json.JSONDecodeError) as exc:
+                if attempt < attempts:
+                    logger.warning(
+                        "LLM call %s output failed validation; retry %d/%d",
+                        key, attempt, attempts - 1,
+                    )
+                    continue
+                logger.error(
+                    "LLM call %s output failed validation after %d attempts: %s",
+                    key, attempts, exc,
+                )
+                raise CustomException(
+                    status_code=503, detail="LLM output failed schema validation"
+                ) from exc
 
     async def _agenerate_with_retry(
         self, key: str, messages: list[dict[str, str]], schema: type[BaseModel]

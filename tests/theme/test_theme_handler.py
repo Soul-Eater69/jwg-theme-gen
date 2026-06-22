@@ -240,6 +240,37 @@ def test_non_retryable_status_is_not_retried(status):
     assert platform.calls == 1
 
 
+class ValidationFailingPlatform:
+    """Returns 200 whose body fails schema validation `fail_times` times, then a valid body."""
+
+    def __init__(self, fail_times):
+        self.fail_times = fail_times
+        self.calls = 0
+
+    async def agenerate(self, message, model_params=None, output_function=None, **kwargs):
+        self.calls += 1
+        if self.calls <= self.fail_times:
+            return ["not", "an", "object"], None, 200  # 200 but does not match TextOut -> retry
+        return {"text": "ok"}, None, 200
+
+
+def test_validation_failure_is_retried_then_raises():
+    platform = ValidationFailingPlatform(fail_times=99)  # never produces valid output
+    handler = _handler_with_retry(platform, RetryConfig(max_attempts=3, delay_seconds=0))
+    with pytest.raises(CustomException) as exc:
+        asyncio.run(handler._call("description_body", TextOut, ticket_context="x"))
+    assert exc.value.status_code == 503
+    assert platform.calls == 3  # re-sampled up to max_attempts
+
+
+def test_validation_failure_recovers_on_retry():
+    platform = ValidationFailingPlatform(fail_times=1)  # bad once, then valid
+    handler = _handler_with_retry(platform, RetryConfig(max_attempts=3, delay_seconds=0))
+    out = asyncio.run(handler._call("description_body", TextOut, ticket_context="x"))
+    assert out.text == "ok"
+    assert platform.calls == 2  # one bad parse, retried, then succeeded
+
+
 # ---- happy path (multiple value streams) ----------------------------------------------
 
 def test_produces_one_theme_per_value_stream():
