@@ -169,6 +169,18 @@ def _register_bundled_nltk_data() -> None:
             pass
 
 
+def _shorten_strings(obj: Any, limit: int = 160) -> Any:
+    """Copy a JSON-ish structure, shortening long strings (the highlight HTML) so the schema shows
+    without flooding the terminal. Scores and structure are kept in full."""
+    if isinstance(obj, str):
+        return obj if len(obj) <= limit else f"{obj[:limit]}… (+{len(obj) - limit} chars)"
+    if isinstance(obj, dict):
+        return {k: _shorten_strings(v, limit) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_shorten_strings(v, limit) for v in obj]
+    return obj
+
+
 def _run_coverage(er_worklet: Worklet, raw_text: str, themes: List[Worklet]) -> None:
     """Run coverage analysis on the generated theme worklets, worklet in -> worklet out."""
     from jwg_app.domain.services.coverage_analysis import CoverageAnalysisService
@@ -185,8 +197,8 @@ def _run_coverage(er_worklet: Worklet, raw_text: str, themes: List[Worklet]) -> 
     except RuntimeError as exc:
         # The n-gram evaluator (text_evaluation) is a prod dependency; print the dataset instead.
         print(f"# evaluator unavailable: {exc}")
-        print("# dataset that WOULD be scored:")
-        print(json.dumps(dataset, indent=2, default=str)[:1500])
+        print("# dataset that WOULD be scored (long text shortened):")
+        print(json.dumps(_shorten_strings(dataset), indent=2, default=str))
         return
 
     # The serialized worklet "analysis" property - exactly what the API would return on the ER.
@@ -201,8 +213,9 @@ def _run_coverage(er_worklet: Worklet, raw_text: str, themes: List[Worklet]) -> 
         if "scores" in value:
             print(f"  per-theme={value.get('scores')}", end="")
         print()
-    print("\n# full analysis property:")
-    print(json.dumps(analysis, indent=2))
+    # Full property - every metric and the whole schema - with only the highlight HTML shortened.
+    print("\n# full analysis property (highlight text shortened to show schema):")
+    print(json.dumps(_shorten_strings(analysis), indent=2))
 
 
 def _build_real_platform():
