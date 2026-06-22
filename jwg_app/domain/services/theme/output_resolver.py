@@ -78,7 +78,8 @@ def resolve_l3(
     picks_by_stage: dict[str, list[str]] = {}
     for stage_id, candidates in candidates_by_stage.items():
         raw = by_stage[stage_id].capabilities if stage_id in by_stage else []
-        chosen = [_clean_id(c) for c in raw]  # the model may echo the id as ``[CAP…]``
+        # each pick is an object; take its id, normalizing a stray ``[CAP…]`` / whitespace, drop empties
+        chosen = [cid for cid in (_clean_id(p.capability_id) for p in raw) if cid]
         resolved[stage_id] = _keep_known_caps(chosen, candidates)
         picks_by_stage[stage_id] = chosen
 

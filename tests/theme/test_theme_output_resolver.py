@@ -3,6 +3,7 @@
 from jwg_app.domain.models.theme_generation import (
     BatchedCapabilitySelection,
     BatchedStageSelection,
+    CapabilityPick,
     L3Capability,
     SelectedStage,
     StageCapabilityPicks,
@@ -98,21 +99,31 @@ def test_resolve_stages_dedups_repeated_picks():
 def test_resolve_l3_keeps_known_and_marks_selected():
     candidates = {"s1": [_l3("c1"), _l3("c2")]}
     picks = BatchedCapabilitySelection(
-        stages=[StageCapabilityPicks(stage_id="s1", capabilities=["c1"])]
+        stages=[StageCapabilityPicks(stage_id="s1", capabilities=[CapabilityPick(capability_id="c1")])]
     )
     out = resolver.resolve_l3(picks, candidates)
     assert [c.id for c in out["s1"]] == ["c1"]
     assert out["s1"][0].selected and out["s1"][0].llm_selected
 
 
-def test_resolve_l3_tolerates_bracketed_or_padded_ids():
-    # the model may echo the candidate id as shown ("[c1]") or with stray whitespace.
-    candidates = {"s1": [_l3("c1"), _l3("c2")]}
+def test_resolve_l3_tolerates_bracketed_padded_and_alt_id_field():
+    # the model may echo the id as shown ("[c1]"), with whitespace, or under "id"/"capabilityId".
+    candidates = {"s1": [_l3("c1"), _l3("c2"), _l3("c3")]}
     picks = BatchedCapabilitySelection(
-        stages=[StageCapabilityPicks(stage_id="s1", capabilities=["[c1]", " c2 "])]
+        stages=[
+            StageCapabilityPicks(
+                stage_id="s1",
+                capabilities=[
+                    CapabilityPick.model_validate({"id": "[c1]"}),         # bracketed, "id" field
+                    CapabilityPick.model_validate({"capabilityId": " c2 "}),  # alt field + padding
+                    CapabilityPick.model_validate({"name": "no id"}),        # malformed -> dropped
+                    CapabilityPick(capability_id="c3"),
+                ],
+            )
+        ]
     )
     out = resolver.resolve_l3(picks, candidates)
-    assert [c.id for c in out["s1"]] == ["c1", "c2"]
+    assert [c.id for c in out["s1"]] == ["c1", "c2", "c3"]
 
 
 def test_resolve_l3_empty_picks_gives_no_capabilities():
@@ -127,7 +138,7 @@ def test_resolve_l3_reassigns_misplaced_to_owner_stage():
         stages=[
             StageCapabilityPicks(
                 stage_id="s1",
-                capabilities=["c1", "c2"],  # c2 misplaced
+                capabilities=[CapabilityPick(capability_id="c1"), CapabilityPick(capability_id="c2")],  # c2 misplaced
             )
         ]
     )
@@ -142,7 +153,7 @@ def test_resolve_l3_dedups_repeated_picks():
         stages=[
             StageCapabilityPicks(
                 stage_id="s1",
-                capabilities=["c1", "c1"],
+                capabilities=[CapabilityPick(capability_id="c1"), CapabilityPick(capability_id="c1")],
             )
         ]
     )

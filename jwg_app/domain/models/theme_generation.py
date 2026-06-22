@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import List
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from jwg_app.domain.models.base import CamelModel
 
@@ -123,12 +123,20 @@ class BatchedStageSelection(CamelModel):
     value_streams: List[VsStageSelection] = Field(default_factory=list)
 
 
+class CapabilityPick(CamelModel):
+    # The model returns each pick as an object (it echoes the candidate's id and name), and it is
+    # inconsistent about the id field name ("id" vs "capabilityId"), so accept both. Optional so a
+    # single malformed pick does not fail the whole parse - the resolver drops picks whose id is empty
+    # or unknown. Name is taken from the catalogue on resolve, so it is not relied on here.
+    capability_id: str = Field(
+        default="", validation_alias=AliasChoices("id", "capabilityId", "capability_id")
+    )
+    name: str = ""
+
+
 class StageCapabilityPicks(CamelModel):
     stage_id: str
-    # The chosen L3 capability ids only. Ids-only (not objects) so the model cannot omit the id - the
-    # id is the value, not a field of an object it could leave out. Name/reason are taken from the
-    # catalogue on resolve, so they are not requested here.
-    capabilities: List[str] = Field(default_factory=list)
+    capabilities: List[CapabilityPick] = Field(default_factory=list)
 
 
 class BatchedCapabilitySelection(CamelModel):
