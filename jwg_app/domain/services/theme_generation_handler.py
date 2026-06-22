@@ -110,7 +110,7 @@ class ThemeGenerationHandler:
             )
 
         er = mapper.to_er_context(er_worklet)
-        vs_ids = [mapper.value_stream_id(stub) for stub in theme_stubs]  # the stub's parentWorkletId
+        vs_ids = [mapper.value_stream_id(stub) for stub in theme_stubs]  # the stub's valueStreamId property
         try:
             catalogue = await self._azure_sql.fetch_theme_inputs(vs_ids)
         except CustomException:
