@@ -52,11 +52,6 @@ from jwg_app.domain.services.theme_generation_handler import (  # noqa: E402
 CONFIG_PATH = os.path.join(ROOT, "configs", "user_config.yaml")
 TICKET_ID = "IDMT-19761"
 RAW_TEXT_FILE = os.path.join(HERE, "raw_text.txt")  # the ticket raw text fed to generation
-DEFAULT_RAW_TEXT = (
-    "The business needs a faster way to procure approved physical assets (order management and "
-    "vendor contract negotiation) and to streamline claims adjudication and pricing for members "
-    "and providers in the new fiscal year."
-)
 
 # Approved value streams, by id only -> every attribute comes from SQL. Multiple ids exercise the
 # batched stage/capability calls, the per-VS parallel business-needs, and the resolver's cross-VS
@@ -103,15 +98,13 @@ def _prop(name: str, value: Any) -> Dict[str, Any]:
 
 
 def _load_raw_text(path: str) -> str:
-    """Read the ticket raw text from a file; fall back to the built-in sample if absent/empty."""
+    """Read the ticket raw text from a file; this is the only ticket input generation reads."""
     p = Path(path)
-    if p.is_file():
-        text = p.read_text(encoding="utf-8").strip()
-        if text:
-            print(f"# raw text from {path} ({len(text)} chars)")
-            return text
-    print(f"# raw text file not found/empty ({path}); using built-in sample")
-    return DEFAULT_RAW_TEXT
+    text = p.read_text(encoding="utf-8").strip() if p.is_file() else ""
+    if not text:
+        raise SystemExit(f"# raw text file not found or empty: {path} (put the ticket text there)")
+    print(f"# raw text from {path} ({len(text)} chars)")
+    return text
 
 
 def build_er_worklet(raw_text: str) -> Worklet:
