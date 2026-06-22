@@ -195,9 +195,8 @@ serialized with `model_dump()` (camelCase on the wire).
 | `stageName` | str | canonical catalogue name |
 | `stageDescription` | str | catalogue scope |
 | `entranceCriteria` / `exitCriteria` | str | catalogue scope |
-| `reason` | str | the model's justification |
 
-**`L3Capability`** (`L3 Business Capability` entries)
+**`L3Capability`** (`L3 Business Capability` entries) — the list holds the selected capabilities only
 
 | field | type | notes |
 | --- | --- | --- |
@@ -205,17 +204,14 @@ serialized with `model_dump()` (camelCase on the wire).
 | `name` / `description` | str | |
 | `stageId` | str | the stage this L3 belongs to |
 | `levelTwoId` / `levelTwoName` | str | parent L2 |
-| `llmSelected` | bool | set by the model, immutable |
-| `selected` | bool | starts = `llmSelected`; user toggles via upsert |
 
-**`L2Capability`** (`L2 Business Capability` entries)
+**`L2Capability`** (`L2 Business Capability` entries) — derived 1:1 from the selected L3
 
 | field | type | notes |
 | --- | --- | --- |
 | `id` | str | L2 capability id (CAP…) |
 | `name` / `description` | str | |
 | `stageId` | str | |
-| `selected` | bool | `true` on derivation; user toggles via upsert |
 
 **`ValueStreamCatalogue`** (what `ThemeCatalogueReader.fetch_theme_inputs` returns per VS) — internal
 to generation; the API team does not build it (the `ThemeService` does). It holds

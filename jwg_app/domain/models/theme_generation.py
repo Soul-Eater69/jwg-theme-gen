@@ -49,8 +49,7 @@ class ValueStage(BaseModel):
 
 
 class L3Capability(CamelModel):
-    """An L3 business capability. ``llm_selected`` is set by the capability call and immutable;
-    ``selected`` starts equal to ``llm_selected`` and is toggled by the user via upsert."""
+    """An L3 business capability the capability call selected (the output holds selected ones only)."""
 
     id: str
     name: str
@@ -58,19 +57,15 @@ class L3Capability(CamelModel):
     stage_id: str
     level_two_id: str
     level_two_name: str
-    llm_selected: bool = False
-    selected: bool = False
 
 
 class L2Capability(CamelModel):
-    """An L2 capability, derived 1:1 from the selected L3 (no LLM). ``selected`` is True on
-    derivation and toggled by the user via upsert."""
+    """An L2 capability, derived 1:1 from the selected L3 (no LLM)."""
 
     id: str
     name: str
     description: str = ""
     stage_id: str
-    selected: bool = True
 
 
 class ValueStreamAttributes(BaseModel):
@@ -103,7 +98,6 @@ class SelectedStage(CamelModel):
     stage_description: str = ""
     entrance_criteria: str = ""
     exit_criteria: str = ""
-    reason: str = ""
 
 
 # The raw model picks ``agenerate`` validates against; the handler resolves them against the

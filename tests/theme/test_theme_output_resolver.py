@@ -35,14 +35,13 @@ def test_resolve_stages_keeps_valid_picks_with_canonical_name():
         value_streams=[
             VsStageSelection(
                 value_stream_id="vs1",
-                selected_stages=[SelectedStage(stage_id="st1", stage_name="echoed", reason="r")],
+                selected_stages=[SelectedStage(stage_id="st1", stage_name="echoed")],
             )
         ]
     )
     out = resolver.resolve_stages(picks, stage_lists)
     assert [s.stage_id for s in out["vs1"]] == ["st1"]
     assert out["vs1"][0].stage_name == "Alpha"  # canonical catalogue name, not the model's echo
-    assert out["vs1"][0].reason == "r"
     # scope is carried from the catalogue so downstream prompts see the full stage
     assert out["vs1"][0].stage_description == "Alpha desc"
     assert out["vs1"][0].entrance_criteria == "Alpha in"
@@ -103,7 +102,6 @@ def test_resolve_l3_keeps_known_and_marks_selected():
     )
     out = resolver.resolve_l3(picks, candidates)
     assert [c.id for c in out["s1"]] == ["c1"]
-    assert out["s1"][0].selected and out["s1"][0].llm_selected
 
 
 def test_resolve_l3_tolerates_bracketed_padded_and_alt_id_field():
@@ -171,7 +169,6 @@ def test_derive_l2_unique_parents_all_selected():
     ]
     out = resolver.derive_l2(selected)
     assert {l2.id for l2 in out} == {"L2a", "L2b"}
-    assert all(l2.selected for l2 in out)
 
 
 def test_derive_l2_skips_l3_without_parent():

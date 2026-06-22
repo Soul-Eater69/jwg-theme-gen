@@ -319,7 +319,7 @@ async def _run_only(handler, only, er_worklet, theme_stubs, catalogue):
         print("-" * 80)
         if only == "stages":
             for s in stages_by_vs.get(vs.vs_id, []):
-                print(f"  [{s.stage_id}] {s.stage_name}" + (f" - {s.reason}" if s.reason else ""))
+                print(f"  [{s.stage_id}] {s.stage_name}")
         elif only == "description":
             print(handler._theme_description(framings.get(vs.vs_id, ""), body))
         elif only == "needs":

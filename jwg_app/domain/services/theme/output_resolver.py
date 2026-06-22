@@ -88,7 +88,7 @@ def resolve_l3(
         picks_by_stage,
         candidates_by_stage,
         id_of=lambda c: c.id,
-        make=lambda stage_id, cap_id: _mark_selected(_cap_in(candidates_by_stage[stage_id], cap_id)),
+        make=lambda stage_id, cap_id: _cap_in(candidates_by_stage[stage_id], cap_id),
     )
     return resolved
 
@@ -108,7 +108,7 @@ def derive_l2(selected_l3: Sequence[L3Capability]) -> list[L2Capability]:
         if not cap.level_two_id or cap.level_two_id in seen:
             continue
         seen[cap.level_two_id] = L2Capability(
-            id=cap.level_two_id, name=cap.level_two_name, stage_id=cap.stage_id, selected=True
+            id=cap.level_two_id, name=cap.level_two_name, stage_id=cap.stage_id
         )
     return list(seen.values())
 
@@ -118,15 +118,15 @@ def _keep_known_stages(
 ) -> list[SelectedStage]:
     """Keep the picks that name a real stage of this value stream; if none do, use every stage."""
     by_id = {s.stage_id: s for s in stages}
-    kept = [(p.stage_id, p.reason) for p in chosen if p.stage_id in by_id]
-    kept = kept or [(s.stage_id, "") for s in stages]
+    kept = [p.stage_id for p in chosen if p.stage_id in by_id]
+    kept = kept or [s.stage_id for s in stages]
     out: list[SelectedStage] = []
     seen: set[str] = set()
-    for stage_id, reason in kept:
+    for stage_id in kept:
         if stage_id in seen:
             continue
         seen.add(stage_id)
-        out.append(_to_selected(by_id[stage_id], reason))
+        out.append(_to_selected(by_id[stage_id]))
     return out
 
 
@@ -145,7 +145,7 @@ def _keep_known_caps(chosen: Sequence[str], candidates: Sequence[L3Capability]) 
         if cap is None or cap.id in seen:
             continue
         seen.add(cap.id)
-        out.append(_mark_selected(cap))
+        out.append(cap)
     return out
 
 
@@ -174,12 +174,7 @@ def _reassign_misplaced(
             target.append(make(real_parent, item_id))
 
 
-def _mark_selected(cap: L3Capability) -> L3Capability:
-    """Return a copy of the capability marked as selected by the model."""
-    return cap.model_copy(update={"llm_selected": True, "selected": True})
-
-
-def _to_selected(stage: ValueStage, reason: str = "") -> SelectedStage:
+def _to_selected(stage: ValueStage) -> SelectedStage:
     """Build a SelectedStage from a catalogue stage, carrying its name and full scope."""
     return SelectedStage(
         stage_id=stage.stage_id,
@@ -187,7 +182,6 @@ def _to_selected(stage: ValueStage, reason: str = "") -> SelectedStage:
         stage_description=stage.stage_description,
         entrance_criteria=stage.entrance_criteria,
         exit_criteria=stage.exit_criteria,
-        reason=reason,
     )
 
 

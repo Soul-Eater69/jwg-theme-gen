@@ -64,8 +64,7 @@ theme_generation:
         - If two adjacent stages are both plausible and you cannot cleanly separate them by their
           criteria, include both rather than guessing which single one the architect meant.
 
-        For each selected stage, give one short business-facing reason that cites the concrete
-        content phrase or action supporting it. Do not mention scores, ranks, prompts, or JSON.
+        Return the selected stages by their stageId. Do not mention scores, ranks, prompts, or JSON.
       static_prompt: |
         ## Ticket context
         {ticket_context}
@@ -108,9 +107,8 @@ theme_generation:
         - When unsure between including a clearly-relevant capability and omitting it, include it - the
           architect trims, and a missed capability is the more common error here.
 
-        For each selected capability return its capability id, its name (exactly as supplied), and one
-        short business-facing reason naming the work in the content that exercises it. Do not mention scores,
-        ranks, prompts, or JSON.
+        For each selected capability return its capability id and its name (exactly as supplied). Do not
+        mention scores, ranks, prompts, or JSON.
       static_prompt: |
         ## Ticket context
         {ticket_context}

@@ -87,14 +87,14 @@ Selects which lifecycle stages of each value stream apply to this ticket.
     {
       "valueStreamId": "VSR00074583",
       "selectedStages": [
-        { "stageId": "VSS00074679", "stageName": "Approve Request", "reason": "<why>" }
+        { "stageId": "VSS00074679", "stageName": "Approve Request" }
       ]
     }
   ]
 }
 ```
 
-The model emits `stageId` + `stageName` (echo) + `reason`. On resolve we keep only the value
+The model emits `stageId` + `stageName` (echo). On resolve we keep only the value
 stream's own stage ids, **overwrite the name** with the canonical catalogue name, and **fill the
 scope** (`stageDescription`, `entranceCriteria`, `exitCriteria`) from the catalogue. Empty / all-invalid
 picks fall back to all of that value stream's stages; a stage placed under the wrong value stream is
