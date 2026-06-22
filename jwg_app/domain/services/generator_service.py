@@ -42,6 +42,7 @@ from jwg_app.domain.exceptions.custom_exception import CustomException
 from jwg_app.domain.interfaces.platform_client import PlatformClient
 from jwg_app.domain.models.base import ValueStreamAction
 from jwg_app.domain.services.coverage_analysis import CoverageAnalysisService
+from jwg_app.domain.services.theme import worklet_mapper as theme_mapper
 from jwg_app.domain.services.theme_generation_handler import ThemeGenerationHandler
 from jwg_app.domain.services.theme_service import ThemeService
 
@@ -152,7 +153,7 @@ class GeneratorService:
             )
         value_stream_ids: List[str] = []
         for stub in theme_stubs:
-            vs_id = stub.get_property_value("valueStreamId")
+            vs_id = theme_mapper.value_stream_id(stub)
             if not vs_id:
                 raise CustomException(
                     status_code=HTTPStatus.BAD_REQUEST,

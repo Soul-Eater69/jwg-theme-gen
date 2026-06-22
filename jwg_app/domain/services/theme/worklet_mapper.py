@@ -25,7 +25,12 @@ from jwg_app.domain.models.theme_generation import (
 
 def get_property(worklet: Worklet, name: str, default: Any = None) -> Any:
     """
-    Read a worklet property value by name via the worklet's native ``get_property_value``.
+    Read a worklet property value by name.
+
+    Uses the worklet's native ``get_property_value`` when available; otherwise reads the
+    ``properties`` list directly. Reading the list keeps this working across Worklet variants whose
+    envelope does not expose the helper methods (the property entries are ``{propertyName,
+    propertyValue}``, as objects or dicts).
 
     Args:
         worklet: The worklet to read from.
@@ -35,22 +40,60 @@ def get_property(worklet: Worklet, name: str, default: Any = None) -> Any:
     Returns:
         The property value with ``name``, or ``default`` when absent.
     """
-    value = worklet.get_property_value(name)
-    return default if value is None else value
+    getter = getattr(worklet, "get_property_value", None)
+    if callable(getter):
+        value = getter(name)
+        return default if value is None else value
+    for prop in getattr(worklet, "properties", None) or []:
+        if _prop_name(prop) == name:
+            value = _prop_value(prop)
+            return default if value is None else value
+    return default
 
 
 def set_property(worklet: Worklet, name: str, value: Any) -> None:
     """
-    Write a worklet property value by name via the worklet's native ``upsert_property`` (so the
-    property is created in the worklet's own ``{propertyName, propertyValue}`` shape, updated when
-    present and appended otherwise).
+    Write a worklet property value by name (updated when present, appended otherwise).
+
+    Uses the worklet's native ``upsert_property`` when available; otherwise updates/appends the
+    ``properties`` list directly so the property is stored in the worklet's own ``{propertyName,
+    propertyValue}`` shape regardless of the Worklet variant.
 
     Args:
         worklet: The worklet to write to.
         name: The property name to set.
         value: The value to store.
     """
-    worklet.upsert_property(name=name, value=value)
+    upsert = getattr(worklet, "upsert_property", None)
+    if callable(upsert):
+        upsert(name=name, value=value)
+        return
+    for prop in getattr(worklet, "properties", None) or []:
+        if _prop_name(prop) == name:
+            _set_prop_value(prop, value)
+            return
+    worklet.properties.append({"propertyName": name, "propertyValue": value})
+
+
+def _prop_name(prop: Any) -> Any:
+    if isinstance(prop, dict):
+        return prop.get("propertyName", prop.get("property_name"))
+    return getattr(prop, "property_name", getattr(prop, "propertyName", None))
+
+
+def _prop_value(prop: Any) -> Any:
+    if isinstance(prop, dict):
+        return prop.get("propertyValue", prop.get("property_value"))
+    return getattr(prop, "property_value", getattr(prop, "propertyValue", None))
+
+
+def _set_prop_value(prop: Any, value: Any) -> None:
+    if isinstance(prop, dict):
+        prop["propertyValue" if "propertyValue" in prop else "property_value"] = value
+    elif hasattr(prop, "property_value"):
+        prop.property_value = value
+    else:
+        prop.propertyValue = value
 
 
 class ERProps:
@@ -109,7 +152,7 @@ def to_vs_context(vs_id: str, catalogue: ValueStreamCatalogue) -> VSContext:
     proposition, trigger) comes from the governed catalogue; only the id is passed in.
 
     Args:
-        vs_id: The value-stream id (from the theme stub's parentWorkletId).
+        vs_id: The value-stream id (from the theme stub's valueStreamId property).
         catalogue: The catalogue record for this value stream.
 
     Returns:
