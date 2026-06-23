@@ -102,12 +102,7 @@ class ERProps:
 
 
 class ThemeProps:
-    VALUE_STREAM_ID = "valueStreamId"  # input: the business VS id (the SQL catalogue key)
-    # The value stream's own catalogue attributes, written onto the theme worklet alongside the id.
-    VALUE_STREAM_NAME = "valueStreamName"
-    VALUE_STREAM_DESCRIPTION = "valueStreamDescription"
-    VALUE_PROPOSITION = "valueProposition"
-    TRIGGER = "trigger"
+    VALUE_STREAM_ID = "valueStreamId"  # input only: the business VS id (the SQL catalogue key)
     TITLE = "title"
     DESCRIPTION = "description"
     BUSINESS_NEEDS = "businessNeeds"
@@ -176,7 +171,6 @@ def to_vs_context(vs_id: str, catalogue: ValueStreamCatalogue) -> VSContext:
 def to_theme_worklet(
     theme_stub: Worklet,
     *,
-    vs: VSContext,
     title: str,
     description: str,
     business_needs: str,
@@ -185,15 +179,15 @@ def to_theme_worklet(
     l2: Sequence[L2Capability],
 ) -> Worklet:
     """
-    Attach the value-stream attributes and the generated theme content onto the theme stub.
+    Attach the generated theme content onto the theme stub and return it.
 
-    The stub's existing properties (and its identity/parentWorkletId) are preserved; the properties
-    below are added, or overwritten if already present (e.g. on a re-run). The stub is edited in
-    place - the API layer persists the same worklet.
+    Only the generated theme properties are written; the stub's existing properties (its
+    ``valueStreamId``, identity, and ``parentWorkletId``) are preserved. Properties are added, or
+    overwritten if already present (e.g. on a re-run). The stub is edited in place - the API layer
+    persists the same worklet.
 
     Args:
         theme_stub: The THEME worklet stub to enrich (edited in place).
-        vs: The value-stream context (its catalogue attributes are written onto the worklet).
         title: The Theme title.
         description: The Theme description.
         business_needs: The Business Needs text.
@@ -202,16 +196,10 @@ def to_theme_worklet(
         l2: The derived L2 capabilities.
 
     Returns:
-        The same theme stub, with the value-stream and generated theme properties attached.
+        The same theme stub, with the generated theme properties attached.
     """
     # CamelModel forces by_alias on model_dump, so the property values serialize camelCase.
     properties = {
-        # the value stream's own data (id is already on the stub; carry name/description/etc. too)
-        ThemeProps.VALUE_STREAM_ID: vs.vs_id,
-        ThemeProps.VALUE_STREAM_NAME: vs.vs_name,
-        ThemeProps.VALUE_STREAM_DESCRIPTION: vs.vs_description,
-        ThemeProps.VALUE_PROPOSITION: vs.value_proposition,
-        ThemeProps.TRIGGER: vs.trigger,
         ThemeProps.TITLE: title,
         ThemeProps.DESCRIPTION: description,
         ThemeProps.BUSINESS_NEEDS: business_needs,

@@ -242,9 +242,11 @@ Value proposition: Accurate, timely claim adjudication and pricing
 
 The five calls' outputs are attached onto each incoming THEME stub (one per value stream):
 
+Only the generated theme properties are written; the stub's `valueStreamId` (input) is preserved, and
+no value-stream attributes are added to the worklet.
+
 | Property | From |
 | --- | --- |
-| `valueStreamId` / `valueStreamName` / `valueStreamDescription` / `valueProposition` / `trigger` | the VS catalogue attributes (carried onto the theme) |
 | `title` | `"<ticket title> -- <vs name>"` |
 | `description` | framing paragraph (call 2) + shared body (call 1) |
 | `businessNeeds` | call 5 |

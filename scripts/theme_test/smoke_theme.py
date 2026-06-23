@@ -137,14 +137,13 @@ def _print_themes(themes: List[Worklet]) -> None:
     print(f"\n# generated {len(themes)} theme worklet(s)\n" + "=" * 80)
     for theme in themes:
         vs_id = mapper.get_property(theme, mapper.ThemeProps.VALUE_STREAM_ID, "")
-        vs_name = mapper.get_property(theme, mapper.ThemeProps.VALUE_STREAM_NAME, "")
         title = mapper.get_property(theme, mapper.ThemeProps.TITLE, "")
         description = mapper.get_property(theme, mapper.ThemeProps.DESCRIPTION, "")
         needs = mapper.get_property(theme, mapper.ThemeProps.BUSINESS_NEEDS, "")
         stages = mapper.get_property(theme, mapper.ThemeProps.SELECTED_STAGES, []) or []
         l3 = mapper.get_property(theme, mapper.ThemeProps.L3, []) or []
         l2 = mapper.get_property(theme, mapper.ThemeProps.L2, []) or []
-        print(f"VALUE STREAM: {vs_id} {vs_name}")
+        print(f"VALUE STREAM: {vs_id}")
         print(f"TITLE: {title}")
         print(f"DESCRIPTION:\n{description}\n")
         print(f"BUSINESS NEEDS:\n{needs}\n")

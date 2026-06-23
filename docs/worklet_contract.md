@@ -77,11 +77,6 @@ worklet; the caller persists the same stub.
 
 | Property name | Content |
 | --- | --- |
-| `valueStreamId` | the VS id (already on the stub; re-set to the catalogue value) |
-| `valueStreamName` | the VS name (from the catalogue) |
-| `valueStreamDescription` | the VS description (from the catalogue) |
-| `valueProposition` | the VS value proposition (from the catalogue) |
-| `trigger` | the VS trigger (from the catalogue) |
 | `title` | `"<idmt ticket title> -- <vs name>"` |
 | `description` | per-VS framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs text for this value stream |
@@ -90,8 +85,8 @@ worklet; the caller persists the same stub.
 | `l3BusinessCapability` | selected L3 capabilities (`L3Capability.model_dump()`) |
 | `l2BusinessCapability` | derived L2 capabilities (`L2Capability.model_dump()`) |
 
-The value-stream attributes are carried onto the theme worklet so the API has the full VS data on the
-theme without a second lookup.
+Only the generated theme properties are written. The stub's `valueStreamId` (the input) and any other
+existing properties are preserved as-is — no value-stream attributes are added to the worklet.
 
 ---
 

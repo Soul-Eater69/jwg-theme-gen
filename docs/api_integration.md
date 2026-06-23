@@ -85,13 +85,11 @@ On a re-run the generated properties are overwritten, not duplicated.
 
 Attached properties:
 
+Only the generated theme properties are written; the stub's `valueStreamId` (input) and any other
+existing properties are preserved as-is — no value-stream attributes are added.
+
 | Property name | Value |
 | --- | --- |
-| `valueStreamId` | the VS id (catalogue key) |
-| `valueStreamName` | the VS name (from the catalogue) |
-| `valueStreamDescription` | the VS description (from the catalogue) |
-| `valueProposition` | the VS value proposition (from the catalogue) |
-| `trigger` | the VS trigger (from the catalogue) |
 | `title` | `"<ticket title> -- <value stream name>"` |
 | `description` | the value stream's framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs document (text; structure is inside the text) |
