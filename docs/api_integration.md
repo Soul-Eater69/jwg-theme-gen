@@ -34,7 +34,7 @@ async def run(
   SQLAlchemy `AsyncSession` from `get_db_session`; the repository runs one projected join for the
   whole catalogue and `ThemeService` assembles it. It implements the `ThemeCatalogueReader` protocol:
   `async def fetch_theme_inputs(vs_ids: Sequence[str]) -> dict[str, ValueStreamCatalogue]`.
-- **`platform_client`** → the prod `PlatformRestClient`
+- **`platform_client`** → the `PlatformRestClient`
   (`jwg_app/infrastructure/external/platform_rest_client.py`). The handler calls its
   `agenerate(message, model_params, output_function) -> (data, error, status_code)`.
 - **`user_config_path`** → the path to `configs/user_config.yaml` (prompts + model params).
@@ -50,7 +50,7 @@ value stream produces a theme, or `run()` raises (see §3). The caller persists 
 
 ## 2. Worklet inputs & outputs
 
-`Worklet` is the prod envelope (`worklet_data_api.Worklet`): `id`, `source_id`, `parent_worklet_id`,
+`Worklet` is the platform envelope (`worklet_data_api.Worklet`): `id`, `source_id`, `parent_worklet_id`,
 `worklet_type`, `state`, and `properties` (a list of `{ property_name, property_value }`). Property
 names below are read/written exactly as shown.
 

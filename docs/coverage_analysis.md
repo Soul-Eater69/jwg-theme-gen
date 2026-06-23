@@ -3,7 +3,7 @@
 How a generated Theme is scored for **grounding** — how much of its text is supported by the original
 ticket, and how much is invented. Implemented by `CoverageAnalysisService`
 (`jwg_app/domain/services/coverage_analysis.py`), which adapts Theme output to the existing n-gram
-evaluator (`text_evaluation.ngram_evaluation.NgramEvaluator`, a prod dependency).
+evaluator (`text_evaluation.ngram_evaluation.NgramEvaluator`, an external dependency).
 
 ## What it measures
 
@@ -100,7 +100,7 @@ property on the **ER** worklet (the analysis scores how well the generated theme
 
 ## Behaviour notes
 
-- **The evaluator is a prod dependency.** If `text_evaluation.ngram_evaluation` is not importable,
+- **The evaluator is an external dependency.** If `text_evaluation.ngram_evaluation` is not importable,
   `analyze` raises `RuntimeError`; `build_dataset` still works (no evaluator needed), so callers can
   inspect what *would* be scored.
 - **Try it via the smoke:** `python scripts/theme_test/smoke_theme.py --real-db --real-llm --coverage`

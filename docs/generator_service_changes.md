@@ -1,8 +1,8 @@
 # `generator_service.py` — changes for the multi-VS theme handler
 
-The prod `GeneratorService._generate_theme_package` must change to match `ThemeGenerationHandler`'s
-current contract. Paste the updated method below into prod's `generator_service.py`. (This file is
-prod-only and not in this repo, so this is a reference, not a compiled drop-in - adapt the session /
+The `GeneratorService._generate_theme_package` must change to match `ThemeGenerationHandler`'s
+current contract. Paste the updated method below into the app's `generator_service.py`. (This file is
+not in this repo, so this is a reference, not a compiled drop-in - adapt the session /
 helper calls to your actual wiring.)
 
 > **The full, current method lives in `jwg_app/domain/services/generator_service.py`** (the partial
@@ -22,7 +22,7 @@ helper calls to your actual wiring.)
    incoming THEME stub and returns it (edited in place, existing properties preserved). Persist each.
 4. **ER audit trail** adds **all** vs_ids to `selected_VS_ids`.
 
-## DI wiring (matches the prod `get_value_stream_service` pattern)
+## DI wiring (matches the `get_value_stream_service` pattern)
 
 `ThemeService` is **injected** into `GeneratorService` via DI - not built inline. The provider chain
 is `get_db_session -> repositories -> ThemeService`, exactly like value streams. `get_theme_service`
@@ -56,7 +56,7 @@ See `jwg_app/domain/services/generator_service.py` for the full, current `_gener
 The `GENERATE` case already passes `theme_stubs=worklets` and returns `result` - it just forwards the
 list, which now flows through correctly.
 
-## Notes / things to confirm on the prod side
+## Notes / things to confirm on the application side
 
 - **DB session.** `ThemeService` needs the five repos on an async SQLAlchemy session. The snippet uses
   `self.session`; wire it to however `GeneratorService` holds its session (or inject `ThemeService`
