@@ -246,10 +246,9 @@ def _run_coverage(er_worklet: Worklet, raw_text: str, themes: List[Worklet]) -> 
         return
 
     # The serialized worklet "analysis" property - exactly what the API would return on the ER.
-    analysis = next(
-        (p for p in analyzed.properties if p.property_name == service.ANALYSIS_PROPERTY), None
-    )
-    analysis = {"propertyName": service.ANALYSIS_PROPERTY, "propertyValue": analysis.property_value}
+    # Read via the mapper so both dict- and object-shaped properties on the ER are handled.
+    analysis_value = mapper.get_property(analyzed, service.ANALYSIS_PROPERTY, []) or []
+    analysis = {"propertyName": service.ANALYSIS_PROPERTY, "propertyValue": analysis_value}
     for metric in analysis["propertyValue"]:
         name = metric.get("metric_name")
         value = metric.get("metric_value", {})
