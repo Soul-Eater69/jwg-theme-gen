@@ -94,7 +94,7 @@ Written properties:
 
 | Property written | Value |
 | --- | --- |
-| `title` | `"<ticket title> -- <value stream name>"` |
+| `title` | `"<ticket title> - <value stream name>"` |
 | `description` | the value stream's framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs document (text; structure is inside the text) |
 | `generatedByLLM` | `true` |
@@ -106,7 +106,7 @@ Written properties:
 
 ```json
 [
-  { "propertyName": "title",          "propertyValue": "CareWay+ commercial claims activation -- Claims Adjudication" },
+  { "propertyName": "title",          "propertyValue": "CareWay+ commercial claims activation - Claims Adjudication" },
   { "propertyName": "description",    "propertyValue": "Under Claims Adjudication, ... <framing> ... <shared body> ..." },
   { "propertyName": "businessNeeds",  "propertyValue": "Eligibility Determination\n- The plan must ... <needs document> ..." },
   { "propertyName": "generatedByLLM", "propertyValue": true },

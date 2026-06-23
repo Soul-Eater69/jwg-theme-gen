@@ -251,7 +251,7 @@ worklet's id and whose type is `THEME`):
 
 | Property | From |
 | --- | --- |
-| `title` | `"<ticket title> -- <vs name>"` |
+| `title` | `"<ticket title> - <vs name>"` |
 | `description` | framing paragraph (call 2) + shared body (call 1) |
 | `businessNeeds` | call 5 |
 | `generatedByLLM` | constant `true` |

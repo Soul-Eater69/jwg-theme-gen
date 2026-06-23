@@ -76,7 +76,7 @@ generated properties below. The input VS worklet is not modified.
 
 | Property name | Content |
 | --- | --- |
-| `title` | `"<idmt ticket title> -- <vs name>"` |
+| `title` | `"<idmt ticket title> - <vs name>"` |
 | `description` | per-VS framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs text for this value stream |
 | `generatedByLLM` | `True` |
@@ -88,7 +88,7 @@ Example of the written properties:
 
 ```json
 [
-  { "propertyName": "title",          "propertyValue": "CareWay+ commercial claims activation -- Claims Adjudication" },
+  { "propertyName": "title",          "propertyValue": "CareWay+ commercial claims activation - Claims Adjudication" },
   { "propertyName": "description",    "propertyValue": "<framing paragraph over the shared body>" },
   { "propertyName": "businessNeeds",  "propertyValue": "<Business Needs document text>" },
   { "propertyName": "generatedByLLM", "propertyValue": true },
