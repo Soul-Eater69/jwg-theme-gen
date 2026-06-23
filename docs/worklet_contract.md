@@ -5,9 +5,9 @@ worklet ↔ domain translation lives in `jwg_app/domain/services/theme/worklet_m
 names below are the only coupling to the worklet shape and are defined there as class-namespaced
 constants (`ERProps`, `DocsSummaryKeys`, `VSProps`, `ThemeProps`).
 
-`ThemeGenerationHandler.run(er_worklet, theme_stubs)` takes one engagement-request worklet and the
-list of THEME worklet stubs (one per approved value stream; each stub carries a `valueStreamId`
-property = the VS id), and returns the same stubs, each enriched with the generated theme content.
+`ThemeGenerationHandler.run(er_worklet, vs_worklets)` takes one engagement-request worklet and the
+list of approved VALUE_STREAM worklets (one per value stream; each carries a `valueStreamId` property
+= the VS id), and **generates** a new THEME worklet per value stream, parented to its VS worklet.
 
 ---
 
@@ -28,12 +28,12 @@ retrieval artifact.
 
 ---
 
-## 2. THEME worklet stub — input
+## 2. VALUE_STREAM worklet — input
 
-One stub per approved value stream. **The stub supplies only the value-stream id** via its
-`valueStreamId` **property** (e.g. `VS10000372`); every other attribute comes from the governed SQL
-catalogue (the single source of truth), keyed by that id. (Note: `parentWorkletId` is the parent VS
-worklet's internal id - the tree link - NOT the catalogue key.)
+One VS worklet per approved value stream. **The worklet supplies the value-stream id** via its
+`valueStreamId` **property** (e.g. `VS10000372`) — the catalogue key — and its own `id`, which becomes
+the generated theme's `parentWorkletId`. Every other attribute comes from the governed SQL catalogue
+(the single source of truth), keyed by the `valueStreamId`.
 
 | Domain field (`VSContext`) | Source | Property / catalogue field |
 | --- | --- | --- |
@@ -66,14 +66,13 @@ catalogue service (`ThemeService` / `ValueStreamCatalogue`).
 
 ---
 
-## 3. Output — the enriched THEME stubs
+## 3. Output — a generated THEME worklet per value stream
 
-`to_theme_worklet` **attaches the generated content onto the incoming THEME stub in place** and
-returns the same stub. It writes **only** the seven properties below (overwritten on a re-run); the
-stub's existing properties, identity, type, and `parentWorkletId` are untouched. No value-stream
-attributes are written.
+`to_theme_worklet` **creates a new THEME worklet** for each value stream: `workletType = THEME`,
+`parentWorkletId =` the VS worklet's `id`, `sourceId` carried down from the VS worklet, and the seven
+generated properties below. The input VS worklet is not modified.
 
-**Properties written** (set via `set_property` - update-or-append)
+**Properties written**
 
 | Property name | Content |
 | --- | --- |
@@ -81,7 +80,7 @@ attributes are written.
 | `description` | per-VS framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs text for this value stream |
 | `generatedByLLM` | `True` |
-| `selectedStages` | selected stages, stored fields only: `stageId`, `stageName`, `reason` (scope used internally, not stored) |
+| `selectedStages` | selected stages (`SelectedStage.model_dump()`: id, name, scope, reason) |
 | `l3BusinessCapability` | selected L3 capabilities (`L3Capability.model_dump()`, incl. description) |
 | `l2BusinessCapability` | derived L2 capabilities (`L2Capability.model_dump()`, incl. description) |
 
@@ -95,6 +94,7 @@ Example of the written properties:
   { "propertyName": "generatedByLLM", "propertyValue": true },
   { "propertyName": "selectedStages", "propertyValue": [
       { "stageId": "VSS00074614", "stageName": "Eligibility Determination",
+        "stageDescription": "...", "entranceCriteria": "...", "exitCriteria": "...",
         "reason": "<why the work falls in this stage>" }
   ] },
   { "propertyName": "l3BusinessCapability", "propertyValue": [

@@ -23,8 +23,8 @@ ThemeGenerationHandler(
 
 async def run(
     er_worklet:  Worklet,          # the Engagement Request worklet
-    theme_stubs: list[Worklet],    # the THEME stubs (each has a valueStreamId property), one per VS
-) -> list[Worklet]                 # the same theme stubs, each enriched with theme properties
+    vs_worklets: list[Worklet],    # the approved VALUE_STREAM worklets (each has a valueStreamId property)
+) -> list[Worklet]                 # a NEW THEME worklet per value stream, parented to its VS worklet
 ```
 
 ### How to construct it (dependency injection)
@@ -43,8 +43,9 @@ The handler takes **only** those three. LLM retry is built in (see §4) - not a 
 
 ### What it returns
 
-A `list[Worklet]`, one **THEME** worklet per approved value stream. All-or-nothing: either every
-value stream produces a theme, or `run()` raises (see §3). The caller persists the worklets.
+A `list[Worklet]`, one **newly generated THEME** worklet per approved value stream, each parented to
+its value-stream worklet. All-or-nothing: either every value stream produces a theme, or `run()`
+raises (see §3). The caller persists the worklets.
 
 ---
 
@@ -63,25 +64,33 @@ names below are read/written exactly as shown.
 
 That's all generation reads from the ER. Summary-derived fields are **not** used.
 
-### 2.2 THEME worklet stubs — input
+### 2.2 VALUE_STREAM worklets — input
 
-`run` takes the **list of THEME stubs** (one per approved value stream) and generates every theme in
-one call. From **each** stub, only the value-stream id is read:
+`run` takes the **list of approved VALUE_STREAM worklets** (one per value stream) and generates a
+theme for every one in a single call. From **each** VS worklet, two things are read:
 
-| Read (per stub) | Worklet field |
+| Read (per VS worklet) | Worklet field |
 | --- | --- |
 | value-stream id (e.g. `VS10000372`) | `valueStreamId` **property** (the catalogue lookup key) |
+| the VS worklet's own id | `id` (becomes the generated theme's `parentWorkletId`) |
 
-**Only the `valueStreamId` property.** Name, description, value proposition, trigger, stages, and
-capabilities all come from SQL (the catalogue), keyed by that id. (`parentWorkletId` is the parent VS
-worklet's internal id, not the catalogue key.) Other properties on the stub are preserved (see output)
-but not read.
+**Only the `valueStreamId` property and the worklet `id`.** Name, description, value proposition,
+trigger, stages, and capabilities all come from SQL (the catalogue), keyed by the `valueStreamId`.
+Nothing is written back onto the VS worklet.
 
-### 2.3 Output — the enriched THEME stubs (one per value stream)
+### 2.3 Output — a newly generated THEME worklet per value stream
 
-`run` returns the **same THEME stubs it was given**, edited in place. It writes **only** the seven
-generated properties below (overwritten on a re-run, not duplicated); the stub's existing properties
-are left untouched.
+`run` **creates** a new THEME worklet for each value stream (it does not edit the input). Each
+generated worklet has:
+
+| Field | Value |
+| --- | --- |
+| `workletType` | `THEME` |
+| `parentWorkletId` | the value-stream worklet's `id` |
+| `sourceId` | carried down from the value-stream worklet |
+| `properties` | the seven generated properties below |
+
+Written properties:
 
 | Property written | Value |
 | --- | --- |
@@ -103,7 +112,9 @@ are left untouched.
   { "propertyName": "generatedByLLM", "propertyValue": true },
   { "propertyName": "selectedStages", "propertyValue": [
       { "stageId": "VSS00074614", "stageName": "Eligibility Determination",
-        "reason": "the ticket asks to adjudicate CareWay+ members' claims, which runs through eligibility" }
+        "stageDescription": "Determine member eligibility for the claim",
+        "entranceCriteria": "claim registered", "exitCriteria": "eligibility decided",
+        "reason": "the ticket adjudicates CareWay+ members' claims, which runs through eligibility" }
   ] },
   { "propertyName": "l3BusinessCapability", "propertyValue": [
       { "id": "CAP00000097", "name": "Eligibility Check", "description": "Verify member eligibility",
@@ -219,16 +230,15 @@ properties.
 Domain models (`jwg_app/domain/models/theme_generation.py`). The list-property values above are these,
 serialized with `model_dump()` (camelCase on the wire).
 
-**`selectedStages`** entries — stored fields only (`stageId`, `stageName`, `reason`)
+**`selectedStages`** entries
 
 | field | type | notes |
 | --- | --- | --- |
 | `stageId` | str | the catalogue stage id (VSS…) — the Jira Epic |
 | `stageName` | str | canonical catalogue name |
+| `stageDescription` | str | catalogue scope |
+| `entranceCriteria` / `exitCriteria` | str | catalogue scope |
 | `reason` | str | the model's grounding — why the work falls in this stage |
-
-(The stage's scope — `stageDescription`, `entranceCriteria`, `exitCriteria` — is used internally for
-the business-needs/capability prompts but is **not** stored on the worklet.)
 
 **`L3Capability`** (`l3BusinessCapability` entries) — the list holds the selected capabilities only
 
@@ -259,7 +269,7 @@ to generation; the API team does not build it (the `ThemeService` does). It hold
 # theme generation (per ANALYSE/GENERATE request)
 catalogue = await get_theme_service(session)                     # ThemeCatalogueReader
 handler = ThemeGenerationHandler(catalogue, platform_client, USER_CONFIG_PATH)
-themes = await handler.run(er_worklet, theme_stubs)             # the same stubs, enriched; raises on failure
+themes = await handler.run(er_worklet, vs_worklets)            # new THEME worklets per VS; raises on failure
 # persist `themes`
 
 # coverage (after generation, on the ER) - worklet in, the same worklet out

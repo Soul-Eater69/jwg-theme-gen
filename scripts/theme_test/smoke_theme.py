@@ -119,12 +119,14 @@ def build_er_worklet(raw_text: str) -> Worklet:
     )
 
 
-def build_theme_stubs() -> List[Worklet]:
-    # THEME stubs: the valueStreamId property carries the VS id (the catalogue lookup key).
+def build_vs_worklets() -> List[Worklet]:
+    # VALUE_STREAM worklets: each has its own worklet id (becomes the theme's parentWorkletId) and a
+    # valueStreamId property carrying the VS id (the catalogue lookup key).
     return [
         Worklet(
+            id=f"vswlet-{vs_id}",
             source_id=f"{TICKET_ID}-{vs_id}",
-            worklet_type="THEME",
+            worklet_type="VALUE_STREAM",
             properties=[_prop("valueStreamId", vs_id)],
         )
         for vs_id in VALUE_STREAMS
@@ -136,14 +138,13 @@ def build_theme_stubs() -> List[Worklet]:
 def _print_themes(themes: List[Worklet]) -> None:
     print(f"\n# generated {len(themes)} theme worklet(s)\n" + "=" * 80)
     for theme in themes:
-        vs_id = mapper.get_property(theme, mapper.ThemeProps.VALUE_STREAM_ID, "")
         title = mapper.get_property(theme, mapper.ThemeProps.TITLE, "")
         description = mapper.get_property(theme, mapper.ThemeProps.DESCRIPTION, "")
         needs = mapper.get_property(theme, mapper.ThemeProps.BUSINESS_NEEDS, "")
         stages = mapper.get_property(theme, mapper.ThemeProps.SELECTED_STAGES, []) or []
         l3 = mapper.get_property(theme, mapper.ThemeProps.L3, []) or []
         l2 = mapper.get_property(theme, mapper.ThemeProps.L2, []) or []
-        print(f"VALUE STREAM: {vs_id}")
+        print(f"THEME worklet: type={theme.worklet_type} parentWorkletId={theme.parent_worklet_id}")
         print(f"TITLE: {title}")
         print(f"DESCRIPTION:\n{description}\n")
         print(f"BUSINESS NEEDS:\n{needs}\n")
@@ -264,32 +265,32 @@ async def main(args: argparse.Namespace) -> None:
     print("# platform: real PlatformRestClient (config from .env)")
 
     raw_text = _load_raw_text(args.raw_text_file)
-    er_worklet, theme_stubs = build_er_worklet(raw_text), build_theme_stubs()
-    vs_ids = [mapper.value_stream_id(w) for w in theme_stubs]
-    print(f"# {len(theme_stubs)} value stream(s): {vs_ids} | only={args.only}")
+    er_worklet, vs_worklets = build_er_worklet(raw_text), build_vs_worklets()
+    vs_ids = [mapper.value_stream_id(w) for w in vs_worklets]
+    print(f"# {len(vs_worklets)} value stream(s): {vs_ids} | only={args.only}")
 
     try:
         async with session_scope() as session:
             service = _build_real_service(session)
             handler = ThemeGenerationHandler(service, platform, CONFIG_PATH)
             if args.only == "all":
-                themes = await handler.run(er_worklet, theme_stubs)
+                themes = await handler.run(er_worklet, vs_worklets)
                 _print_themes(themes)
                 if args.coverage:
                     _run_coverage(er_worklet, raw_text, themes)
             else:
                 catalogue = await service.fetch_theme_inputs(vs_ids)
-                await _run_only(handler, args.only, er_worklet, theme_stubs, catalogue)
+                await _run_only(handler, args.only, er_worklet, vs_worklets, catalogue)
     finally:
         if hasattr(platform, "aclose"):
             await platform.aclose()
         await dispose()
 
 
-async def _run_only(handler, only, er_worklet, theme_stubs, catalogue):
+async def _run_only(handler, only, er_worklet, vs_worklets, catalogue):
     """Run one generator (batched, as in the real pipeline) and print its output per value stream."""
     er = mapper.to_er_context(er_worklet)
-    vs_ids = [mapper.value_stream_id(w) for w in theme_stubs]
+    vs_ids = [mapper.value_stream_id(w) for w in vs_worklets]
     vs_list = [mapper.to_vs_context(vid, catalogue.get(vid, ValueStreamCatalogue())) for vid in vs_ids]
 
     # Compute the requested generator once (same calls the pipeline makes), then display per VS.

@@ -11,7 +11,7 @@ What changed vs the previous _generate_theme_package:
   1. Inject ThemeService as azure_sql_client (the handler reads VS attributes/stages/capabilities
      from Azure SQL; the constructor now requires it). ThemeService is injected into GeneratorService
      via DI - see get_generator_service note below - matching the get_value_stream_service pattern.
-  2. Multi-VS: collect ALL VS ids from the theme stubs, fetch all VS worklets, run(list) -> list.
+  2. Multi-VS: take the approved VS worklets, run(er, vs_worklets) -> generated THEME worklets.
   3. Persist each enriched worklet (to_theme_worklet edits the VS worklet in place).
   4. Add all vs_ids to the ER selected_VS_ids audit trail.
 
@@ -92,8 +92,8 @@ class GeneratorService:
 
         Actions:
             - null:     Upsert (save/edit VS worklets)
-            - GENERATE: Generate Theme package (TEGApiSpec §6 - Screen 3). Input: THEME worklet stubs
-              with a valueStreamId property = the VS id.
+            - GENERATE: Generate Theme package (TEGApiSpec §6 - Screen 3). Input: the approved
+              VALUE_STREAM worklets (each with a valueStreamId property = the VS id).
         """
         await self.worklet_api_vs.begin()
 
@@ -108,10 +108,10 @@ class GeneratorService:
                 return result, "Value Streams saved successfully"
 
             case ValueStreamAction.GENERATE:
-                # Theme generation (TEGApiSpec §6 - Screen 3): THEME stubs carry the vsWorkletId.
+                # Theme generation (TEGApiSpec §6 - Screen 3): the approved VALUE_STREAM worklets.
                 result = await self._generate_theme_package(
                     engagement_request_id=engagement_request_id,
-                    theme_stubs=worklets,
+                    vs_worklets=worklets,
                     user_info=user,
                 )
                 await self.worklet_api_vs.commit()
@@ -126,38 +126,38 @@ class GeneratorService:
     async def _generate_theme_package(
         self,
         engagement_request_id: str,
-        theme_stubs: List[Worklet],
+        vs_worklets: List[Worklet],
         user_info: User,
     ) -> List[Worklet]:
         """
-        Generate Theme packages for the approved Value Streams via ThemeGenerationHandler.
+        Generate Theme worklets for the approved Value Streams via ThemeGenerationHandler.
 
         TEGApiSpec §6 - Screen 3. Endpoint: POST /api/v1/worklets/{erWorkletId}/worklets, GENERATE.
-        Each THEME worklet stub carries a valueStreamId property (the VS id). The handler is multi-VS: it
-        takes the full list of VS worklets and batches stage/description/capability selection across
-        them.
+        The request body is the approved VALUE_STREAM worklets (each with a valueStreamId property).
+        The handler is multi-VS: it batches stage/description/capability selection across them and
+        generates one THEME worklet per value stream, parented to that VS worklet.
 
         Args:
             engagement_request_id: ER worklet ID (URL path param).
-            theme_stubs: THEME worklet stubs from the request body (each has a valueStreamId property).
+            vs_worklets: The approved VALUE_STREAM worklets from the request body.
             user_info: Authenticated user performing the operation.
 
         Returns:
             The list of saved THEME worklets (one per approved Value Stream).
         """
-        # Step 0 - collect ALL VS ids from each stub's valueStreamId property (deduped, order kept).
-        if not theme_stubs:
+        # Step 0 - require at least one VS worklet, each carrying a valueStreamId (deduped for audit).
+        if not vs_worklets:
             raise CustomException(
                 status_code=HTTPStatus.BAD_REQUEST,
-                detail="GENERATE action requires at least one THEME worklet stub in source",
+                detail="GENERATE action requires at least one Value Stream worklet in source",
             )
         value_stream_ids: List[str] = []
-        for stub in theme_stubs:
-            vs_id = theme_mapper.value_stream_id(stub)
+        for vs_worklet in vs_worklets:
+            vs_id = theme_mapper.value_stream_id(vs_worklet)
             if not vs_id:
                 raise CustomException(
                     status_code=HTTPStatus.BAD_REQUEST,
-                    detail="Theme stub must have a valueStreamId property",
+                    detail="Value Stream worklet must have a valueStreamId property",
                 )
             if vs_id not in value_stream_ids:
                 value_stream_ids.append(vs_id)
@@ -172,10 +172,8 @@ class GeneratorService:
                 status_code=er_validation["status_code"], detail=er_validation["detail"]
             )
 
-        # Step 2 - validate EACH referenced Value Stream exists (the handler reads its data from SQL;
-        # we only confirm the VS worklet is present and parented to this ER).
-        for value_stream_id in value_stream_ids:
-            vs_worklet = await self.get_worklet_by_id(value_stream_id)
+        # Step 2 - validate EACH input VS worklet (correct type, parented to this ER).
+        for vs_worklet in vs_worklets:
             vs_validation = await self.validate_worklet(
                 vs_worklet,
                 WorkletType.VALUE_STREAM,
@@ -187,17 +185,17 @@ class GeneratorService:
                     status_code=vs_validation["status_code"], detail=vs_validation["detail"]
                 )
 
-        # Step 3 - run generation on the THEME stubs. The catalogue reader (ThemeService) is injected
-        # via DI; the handler reads each VS's attributes/stages/capabilities from Azure SQL (keyed by
-        # the stub's parentWorkletId) and attaches the generated content onto each stub (list -> list).
+        # Step 3 - generate. The catalogue reader (ThemeService) is injected via DI; the handler reads
+        # each VS's attributes/stages/capabilities from Azure SQL (keyed by each VS worklet's
+        # valueStreamId) and generates one THEME worklet per VS, parented to that VS worklet.
         handler = ThemeGenerationHandler(
             azure_sql_client=self.theme_service,
             platform_client=self.platform_client,
             user_config_path="configs/user_config.yaml",
         )
-        theme_worklets = await handler.run(er_worklet=er_worklet, theme_stubs=theme_stubs)
+        theme_worklets = await handler.run(er_worklet=er_worklet, vs_worklets=vs_worklets)
 
-        # Step 4 - persist each enriched THEME stub (the handler attached the content in place).
+        # Step 4 - persist each generated THEME worklet (new worklets, parented to their VS worklet).
         saved_themes: List[Worklet] = []
         for theme_worklet in theme_worklets:
             theme_worklet.current_user = user_info

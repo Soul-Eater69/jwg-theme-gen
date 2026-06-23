@@ -13,6 +13,7 @@ from typing import Any
 
 from worklet_data_api import Worklet
 
+from jwg_app.domain.models.base import WorkletType
 from jwg_app.domain.models.theme_generation import (
     ValueStreamCatalogue,
     ERContext,
@@ -112,20 +113,20 @@ class ThemeProps:
     L2 = "l2BusinessCapability"
 
 
-def value_stream_id(theme_stub: Worklet) -> str:
+def value_stream_id(vs_worklet: Worklet) -> str:
     """
-    Read the Value Stream id (the SQL catalogue lookup key) from the stub's ``valueStreamId`` property.
+    Read the Value Stream id (the SQL catalogue lookup key) from the VS worklet's ``valueStreamId``
+    property.
 
-    This is the business id (e.g. ``VS10000372``), NOT ``parentWorkletId`` (which is the parent VS
-    worklet's internal id).
+    This is the business id (e.g. ``VS10000372``), NOT the worklet's internal ``id``.
 
     Args:
-        theme_stub: The THEME worklet stub.
+        vs_worklet: The value-stream worklet.
 
     Returns:
         The Value Stream id.
     """
-    return get_property(theme_stub, ThemeProps.VALUE_STREAM_ID, "")
+    return get_property(vs_worklet, ThemeProps.VALUE_STREAM_ID, "")
 
 
 def to_er_context(er_worklet: Worklet) -> ERContext:
@@ -152,7 +153,7 @@ def to_vs_context(vs_id: str, catalogue: ValueStreamCatalogue) -> VSContext:
     proposition, trigger) comes from the governed catalogue; only the id is passed in.
 
     Args:
-        vs_id: The value-stream id (from the theme stub's valueStreamId property).
+        vs_id: The value-stream id (from the VS worklet's valueStreamId property).
         catalogue: The catalogue record for this value stream.
 
     Returns:
@@ -169,7 +170,7 @@ def to_vs_context(vs_id: str, catalogue: ValueStreamCatalogue) -> VSContext:
 
 
 def to_theme_worklet(
-    theme_stub: Worklet,
+    vs_worklet: Worklet,
     *,
     title: str,
     description: str,
@@ -179,24 +180,25 @@ def to_theme_worklet(
     l2: Sequence[L2Capability],
 ) -> Worklet:
     """
-    Attach the generated theme content onto the theme stub and return it.
+    Generate a new THEME worklet from the generated content, parented to the value-stream worklet.
 
-    Only the generated theme properties are written; the stub's existing properties (its
-    ``valueStreamId``, identity, and ``parentWorkletId``) are preserved. Properties are added, or
-    overwritten if already present (e.g. on a re-run). The stub is edited in place - the API layer
-    persists the same worklet.
+    The theme worklet is **created** (not an enriched stub): its ``parent_worklet_id`` is the VS
+    worklet's id, its ``worklet_type`` is ``THEME``, its ``source_id`` carries down from the VS
+    worklet, and its ``properties`` are the generated theme content (as
+    ``{propertyName, propertyValue}`` entries).
 
     Args:
-        theme_stub: The THEME worklet stub to enrich (edited in place).
+        vs_worklet: The value-stream worklet this theme is generated under (its id becomes the
+            theme's parent id).
         title: The Theme title.
         description: The Theme description.
         business_needs: The Business Needs text.
-        selected_stages: The stages selected for the value stream.
+        selected_stages: The stages selected for the value stream (full shape: id, name, scope, reason).
         l3: The selected L3 capabilities.
         l2: The derived L2 capabilities.
 
     Returns:
-        The same theme stub, with the generated theme properties attached.
+        A new THEME worklet parented to ``vs_worklet``.
     """
     # CamelModel forces by_alias on model_dump, so the property values serialize camelCase.
     properties = {
@@ -204,15 +206,15 @@ def to_theme_worklet(
         ThemeProps.DESCRIPTION: description,
         ThemeProps.BUSINESS_NEEDS: business_needs,
         ThemeProps.GENERATED_BY_LLM: True,
-        # stages store only id, name, and reason; the catalogue scope is used internally, not stored.
-        ThemeProps.SELECTED_STAGES: [
-            s.model_dump(include={"stage_id", "stage_name", "reason"}) for s in selected_stages
-        ],
-        # L3 / L2 keep their full shape, including description.
+        ThemeProps.SELECTED_STAGES: [s.model_dump() for s in selected_stages],
         ThemeProps.L3: [c.model_dump() for c in l3],
         ThemeProps.L2: [c.model_dump() for c in l2],
     }
-
-    for name, value in properties.items():
-        set_property(theme_stub, name, value)
-    return theme_stub
+    return Worklet(
+        worklet_type=WorkletType.THEME,
+        parent_worklet_id=vs_worklet.id,
+        source_id=vs_worklet.source_id,
+        properties=[
+            {"propertyName": name, "propertyValue": value} for name, value in properties.items()
+        ],
+    )

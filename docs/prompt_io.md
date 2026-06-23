@@ -152,8 +152,8 @@ The model returns `stageId` (+ echoes `stageName`) and a `reason` that cites the
 it must justify each pick, which curbs over-selection). On resolve we keep only ids that belong to the
 value stream, **overwrite the name + fill the scope** from the catalogue, carry the model's `reason`
 through, drop unknown ids, move a stage placed under the wrong value stream back to its owner, and —
-if a VS got no valid pick — fall back to all of its stages (never empty). The worklet stores only
-`stageId` / `stageName` / `reason`. See [resolve internals](#resolution-how-picks-are-cleaned).
+if a VS got no valid pick — fall back to all of its stages (never empty). See
+[resolve internals](#resolution-how-picks-are-cleaned).
 
 ---
 
@@ -243,10 +243,11 @@ Value proposition: Accurate, timely claim adjudication and pricing
 
 ## Final assembly — the THEME worklet
 
-The five calls' outputs are attached onto each incoming THEME stub (one per value stream):
+The five calls' outputs make up each generated THEME worklet (one per value stream), parented to its
+value-stream worklet:
 
-Only these seven generated properties are written onto the theme stub; no value-stream attributes are
-added.
+These seven properties make up the generated theme worklet (whose `parentWorkletId` is the VS
+worklet's id and whose type is `THEME`):
 
 | Property | From |
 | --- | --- |

@@ -57,9 +57,12 @@ def _er():
     return _Worklet(source_id="t1", id="t1", properties=[_Prop("title", "Ticket Title"), _Prop("rawText", "RAW")])
 
 
-def _stub(vs_id):
-    # A THEME stub: the valueStreamId PROPERTY carries the VS id (the catalogue lookup key).
-    return _Worklet(id=f"theme-{vs_id}", properties=[_Prop("valueStreamId", vs_id)])
+def _vs_worklet(vs_id):
+    # A VALUE_STREAM worklet: its id becomes the theme's parentWorkletId; the valueStreamId PROPERTY
+    # carries the VS id (the catalogue lookup key).
+    return _Worklet(
+        id=f"vswlet-{vs_id}", source_id="t1", properties=[_Prop("valueStreamId", vs_id)]
+    )
 
 
 class FakeCatalogue:
@@ -158,7 +161,7 @@ def _catalogue_with_stages(*vs_ids):
 def test_missing_er_worklet_raises_404():
     handler = ThemeGenerationHandler(FakeCatalogue({}), FakePlatform(), CONFIG_PATH)
     with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(None, [_stub("vs1")]))
+        asyncio.run(handler.run(None, [_vs_worklet("vs1")]))
     assert exc.value.status_code == 404
 
 
@@ -172,7 +175,7 @@ def test_empty_vs_worklets_raises_404():
 def test_catalogue_failure_raises_503():
     handler = ThemeGenerationHandler(RaisingCatalogue(), FakePlatform(), CONFIG_PATH)
     with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_stub("vs1")]))
+        asyncio.run(handler.run(_er(), [_vs_worklet("vs1")]))
     assert exc.value.status_code == 503
 
 
@@ -180,14 +183,14 @@ def test_vs_with_no_stages_raises_400():
     # all-or-nothing: a value stream with no stages fails the whole request
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), FakePlatform(), CONFIG_PATH)
     with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_stub("vs1"), _stub("vs2")]))
+        asyncio.run(handler.run(_er(), [_vs_worklet("vs1"), _vs_worklet("vs2")]))
     assert exc.value.status_code == 400
 
 
 def test_non_retryable_llm_failure_raises_503():
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), FailingPlatform(), CONFIG_PATH)
     with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_stub("vs1")]))
+        asyncio.run(handler.run(_er(), [_vs_worklet("vs1")]))
     assert exc.value.status_code == 503
 
 
@@ -200,7 +203,7 @@ def test_any_core_call_failure_raises_503(schema):
     platform = SchemaFailingPlatform(failing_schema=schema)
     handler = _handler_with_retry(platform, RetryConfig(enabled=False))
     with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_stub("vs1")]))
+        asyncio.run(handler.run(_er(), [_vs_worklet("vs1")]))
     assert exc.value.status_code == 503
 
 
@@ -275,11 +278,14 @@ def test_validation_failure_recovers_on_retry():
 
 def test_produces_one_theme_per_value_stream():
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1", "vs2"), FakePlatform(), CONFIG_PATH)
-    themes = asyncio.run(handler.run(_er(), [_stub("vs1"), _stub("vs2")]))
+    themes = asyncio.run(handler.run(_er(), [_vs_worklet("vs1"), _vs_worklet("vs2")]))
 
     assert len(themes) == 2
     titles = [mapper.get_property(t, mapper.ThemeProps.TITLE, "") for t in themes]
     assert all("Ticket Title" in t for t in titles)
+    # each theme is a new THEME worklet parented to its value-stream worklet
+    assert [t.parent_worklet_id for t in themes] == ["vswlet-vs1", "vswlet-vs2"]
+    assert all(str(t.worklet_type) in ("WorkletType.THEME", "THEME") for t in themes)
     for theme in themes:
         stages = mapper.get_property(theme, mapper.ThemeProps.SELECTED_STAGES, [])
         assert len(stages) == 1
@@ -294,5 +300,5 @@ def test_any_vs_business_needs_failure_raises_503():
         platform, RetryConfig(enabled=False), catalogue=_catalogue_with_stages("vs1", "vs2")
     )
     with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_stub("vs1"), _stub("vs2")]))
+        asyncio.run(handler.run(_er(), [_vs_worklet("vs1"), _vs_worklet("vs2")]))
     assert exc.value.status_code == 503
