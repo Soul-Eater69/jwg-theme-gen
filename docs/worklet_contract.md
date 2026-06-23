@@ -68,12 +68,12 @@ catalogue service (`ThemeService` / `ValueStreamCatalogue`).
 
 ## 3. Output — the enriched THEME stubs
 
-`to_theme_worklet` **attaches the generated content onto the incoming THEME stub in place**: it adds
-the generated properties to the stub's existing properties (overwriting them on a re-run) and returns
-the same stub. The stub's identity, type, and `parentWorkletId` are unchanged - there is no new
-worklet; the caller persists the same stub.
+`to_theme_worklet` **attaches the generated content onto the incoming THEME stub in place** and
+returns the same stub. It writes **only** the seven properties below (overwritten on a re-run); the
+stub's existing properties, identity, type, and `parentWorkletId` are untouched. No value-stream
+attributes are written.
 
-**Appended properties** (set via `set_property` - update-or-append)
+**Properties written** (set via `set_property` - update-or-append)
 
 | Property name | Content |
 | --- | --- |
@@ -85,8 +85,27 @@ worklet; the caller persists the same stub.
 | `l3BusinessCapability` | selected L3 capabilities (`L3Capability.model_dump()`) |
 | `l2BusinessCapability` | derived L2 capabilities (`L2Capability.model_dump()`) |
 
-Only the generated theme properties are written. The stub's `valueStreamId` (the input) and any other
-existing properties are preserved as-is — no value-stream attributes are added to the worklet.
+Example of the written properties:
+
+```json
+[
+  { "propertyName": "title",          "propertyValue": "CareWay+ commercial claims activation -- Claims Adjudication" },
+  { "propertyName": "description",    "propertyValue": "<framing paragraph over the shared body>" },
+  { "propertyName": "businessNeeds",  "propertyValue": "<Business Needs document text>" },
+  { "propertyName": "generatedByLLM", "propertyValue": true },
+  { "propertyName": "selectedStages", "propertyValue": [
+      { "stageId": "VSS00074614", "stageName": "Eligibility Determination",
+        "stageDescription": "...", "entranceCriteria": "...", "exitCriteria": "..." }
+  ] },
+  { "propertyName": "l3BusinessCapability", "propertyValue": [
+      { "id": "CAP00000097", "name": "Eligibility Check", "description": "...",
+        "stageId": "VSS00074614", "levelTwoId": "CAP00000036", "levelTwoName": "Claim Adjudication" }
+  ] },
+  { "propertyName": "l2BusinessCapability", "propertyValue": [
+      { "id": "CAP00000036", "name": "Claim Adjudication", "description": "...", "stageId": "VSS00074614" }
+  ] }
+]
+```
 
 ---
 

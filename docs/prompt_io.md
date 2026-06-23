@@ -242,8 +242,8 @@ Value proposition: Accurate, timely claim adjudication and pricing
 
 The five calls' outputs are attached onto each incoming THEME stub (one per value stream):
 
-Only the generated theme properties are written; the stub's `valueStreamId` (input) is preserved, and
-no value-stream attributes are added to the worklet.
+Only these seven generated properties are written onto the theme stub; no value-stream attributes are
+added.
 
 | Property | From |
 | --- | --- |

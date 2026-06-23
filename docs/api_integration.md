@@ -79,16 +79,11 @@ but not read.
 
 ### 2.3 Output — the enriched THEME stubs (one per value stream)
 
-`run` returns the **same THEME stubs it was given**, each with the generated theme properties
-**attached** (edited in place; the stub's existing properties and `parentWorkletId` are preserved).
-On a re-run the generated properties are overwritten, not duplicated.
+`run` returns the **same THEME stubs it was given**, edited in place. It writes **only** the seven
+generated properties below (overwritten on a re-run, not duplicated); the stub's existing properties
+are left untouched.
 
-Attached properties:
-
-Only the generated theme properties are written; the stub's `valueStreamId` (input) and any other
-existing properties are preserved as-is — no value-stream attributes are added.
-
-| Property name | Value |
+| Property written | Value |
 | --- | --- |
 | `title` | `"<ticket title> -- <value stream name>"` |
 | `description` | the value stream's framing paragraph over the shared body |
@@ -97,6 +92,29 @@ existing properties are preserved as-is — no value-stream attributes are added
 | `selectedStages` | list of selected stages (see type below) |
 | `l3BusinessCapability` | list of selected L3 capabilities |
 | `l2BusinessCapability` | list of derived L2 capabilities |
+
+### Example — the properties written onto one theme worklet
+
+```json
+[
+  { "propertyName": "title",          "propertyValue": "CareWay+ commercial claims activation -- Claims Adjudication" },
+  { "propertyName": "description",    "propertyValue": "Under Claims Adjudication, ... <framing> ... <shared body> ..." },
+  { "propertyName": "businessNeeds",  "propertyValue": "Eligibility Determination\n- The plan must ... <needs document> ..." },
+  { "propertyName": "generatedByLLM", "propertyValue": true },
+  { "propertyName": "selectedStages", "propertyValue": [
+      { "stageId": "VSS00074614", "stageName": "Eligibility Determination",
+        "stageDescription": "Determine member eligibility for the claim",
+        "entranceCriteria": "claim registered", "exitCriteria": "eligibility decided" }
+  ] },
+  { "propertyName": "l3BusinessCapability", "propertyValue": [
+      { "id": "CAP00000097", "name": "Eligibility Check", "description": "Verify member eligibility",
+        "stageId": "VSS00074614", "levelTwoId": "CAP00000036", "levelTwoName": "Claim Adjudication" }
+  ] },
+  { "propertyName": "l2BusinessCapability", "propertyValue": [
+      { "id": "CAP00000036", "name": "Claim Adjudication", "description": "...", "stageId": "VSS00074614" }
+  ] }
+]
+```
 
 ---
 
