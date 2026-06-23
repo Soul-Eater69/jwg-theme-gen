@@ -111,7 +111,6 @@ def derive_l2(selected_l3: Sequence[L3Capability]) -> list[L2Capability]:
             id=cap.level_two_id,
             name=cap.level_two_name,
             description=cap.level_two_description,
-            stage_id=cap.stage_id,
         )
     return list(seen.values())
 

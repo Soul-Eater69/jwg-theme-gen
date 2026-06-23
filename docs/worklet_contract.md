@@ -102,7 +102,7 @@ Example of the written properties:
         "stageId": "VSS00074614", "levelTwoId": "CAP00000036", "levelTwoName": "Claim Adjudication" }
   ] },
   { "propertyName": "l2BusinessCapability", "propertyValue": [
-      { "id": "CAP00000036", "name": "Claim Adjudication", "description": "...", "stageId": "VSS00074614" }
+      { "id": "CAP00000036", "name": "Claim Adjudication", "description": "..." }
   ] }
 ]
 ```

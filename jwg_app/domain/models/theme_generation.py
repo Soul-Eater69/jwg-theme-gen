@@ -61,12 +61,13 @@ class L3Capability(CamelModel):
 
 
 class L2Capability(CamelModel):
-    """An L2 capability, derived 1:1 from the selected L3 (no LLM)."""
+    """An L2 capability rolled up from the selected L3 (no LLM). No stage link: one L2 can parent L3s
+    across several stages, so it carries only its own id/name/description; the L2<->L3<->stage links
+    live on each L3 (``level_two_id`` + ``stage_id``)."""
 
     id: str
     name: str
     description: str = ""
-    stage_id: str
 
 
 class ValueStreamAttributes(BaseModel):

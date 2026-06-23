@@ -122,7 +122,7 @@ Written properties:
         "levelTwoDescription": "..." }
   ] },
   { "propertyName": "l2BusinessCapability", "propertyValue": [
-      { "id": "CAP00000036", "name": "Claim Adjudication", "description": "...", "stageId": "VSS00074614" }
+      { "id": "CAP00000036", "name": "Claim Adjudication", "description": "..." }
   ] }
 ]
 ```
@@ -250,13 +250,15 @@ serialized with `model_dump()` (camelCase on the wire).
 | `stageId` | str | the stage this L3 belongs to |
 | `levelTwoId` / `levelTwoName` / `levelTwoDescription` | str | parent L2 (id, name, description) |
 
-**`L2Capability`** (`l2BusinessCapability` entries) — derived 1:1 from the selected L3
+**`L2Capability`** (`l2BusinessCapability` entries) — the deduped L2 rollup of the selected L3
 
 | field | type | notes |
 | --- | --- | --- |
 | `id` | str | L2 capability id (CAP…) |
 | `name` / `description` | str | |
-| `stageId` | str | |
+
+No stage/L3 link on L2 — one L2 can parent L3s across several stages, so it carries only its own
+id/name/description; the L2↔L3↔stage links live on each L3 entry (`levelTwoId` + `stageId`).
 
 **`ValueStreamCatalogue`** (what `ThemeCatalogueReader.fetch_theme_inputs` returns per VS) — internal
 to generation; the API team does not build it (the `ThemeService` does). It holds
