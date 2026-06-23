@@ -118,7 +118,8 @@ Written properties:
   ] },
   { "propertyName": "l3BusinessCapability", "propertyValue": [
       { "id": "CAP00000097", "name": "Eligibility Check", "description": "Verify member eligibility",
-        "stageId": "VSS00074614", "levelTwoId": "CAP00000036", "levelTwoName": "Claim Adjudication" }
+        "stageId": "VSS00074614", "levelTwoId": "CAP00000036", "levelTwoName": "Claim Adjudication",
+        "levelTwoDescription": "..." }
   ] },
   { "propertyName": "l2BusinessCapability", "propertyValue": [
       { "id": "CAP00000036", "name": "Claim Adjudication", "description": "...", "stageId": "VSS00074614" }
@@ -247,7 +248,7 @@ serialized with `model_dump()` (camelCase on the wire).
 | `id` | str | L3 capability id (CAP…) |
 | `name` / `description` | str | |
 | `stageId` | str | the stage this L3 belongs to |
-| `levelTwoId` / `levelTwoName` | str | parent L2 |
+| `levelTwoId` / `levelTwoName` / `levelTwoDescription` | str | parent L2 (id, name, description) |
 
 **`L2Capability`** (`l2BusinessCapability` entries) — derived 1:1 from the selected L3
 

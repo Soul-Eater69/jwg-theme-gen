@@ -14,7 +14,7 @@ from jwg_app.domain.services.theme_service import ThemeService
 _FIELDS = (
     "vs_id", "vs_name", "vs_description", "vs_value_proposition", "vs_trigger",
     "stage_id", "stage_name", "stage_description", "stage_entrance", "stage_exit",
-    "l3_id", "l3_name", "l3_description", "level_two_id", "level_two_name",
+    "l3_id", "l3_name", "l3_description", "level_two_id", "level_two_name", "level_two_description",
 )
 
 

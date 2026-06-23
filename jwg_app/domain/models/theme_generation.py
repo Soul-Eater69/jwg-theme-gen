@@ -57,6 +57,7 @@ class L3Capability(CamelModel):
     stage_id: str
     level_two_id: str
     level_two_name: str
+    level_two_description: str = ""
 
 
 class L2Capability(CamelModel):

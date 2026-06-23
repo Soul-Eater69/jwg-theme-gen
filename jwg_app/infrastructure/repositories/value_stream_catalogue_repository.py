@@ -82,6 +82,7 @@ class ValueStreamCatalogueRepository:
                 L3CapabilityModel.capability_description.label("l3_description"),
                 L3CapabilityModel.parent_capability_id.label("level_two_id"),
                 L2CapabilityModel.capability_name.label("level_two_name"),
+                L2CapabilityModel.capability_description.label("level_two_description"),
             )
             .select_from(ValueStreamModel)
             .outerjoin(

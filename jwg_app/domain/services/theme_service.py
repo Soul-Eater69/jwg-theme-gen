@@ -96,6 +96,7 @@ class ThemeService:
                             stage_id=r.stage_id,
                             level_two_id=r.level_two_id or "",
                             level_two_name=r.level_two_name or "",
+                            level_two_description=r.level_two_description or "",
                         )
                     )
 
