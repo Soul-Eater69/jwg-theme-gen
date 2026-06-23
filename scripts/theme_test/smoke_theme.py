@@ -76,13 +76,17 @@ class _DebugPlatform:
     ) -> Tuple[Optional[Any], Optional[str], int]:
         schema = output_function.__name__ if output_function else "?"
         user = message[-1]["content"] if message else ""
-        print(f"\n>>> agenerate [{schema}] | model_params={model_params}")
+        print(f"\n>>> agenerate [{schema}] | model_params={ {k: v for k, v in (model_params or {}).items() if k != 'response_format'} }")
         print(f">>> user message ({len(user)} chars), first 400:\n{user[:400]}")
         data, error, status = await self._inner.agenerate(
             message=message, model_params=model_params, output_function=output_function, **kwargs
         )
         print(f"<<< status={status} error={error!r}")
-        print(f"<<< data (first 600): {str(data)[:600]!r}")
+        # the EXACT, full LLM output for this call (pretty-printed when it is JSON-ish)
+        try:
+            print(f"<<< data (full):\n{json.dumps(data, indent=2, default=str)}")
+        except (TypeError, ValueError):
+            print(f"<<< data (full): {data!r}")
         return data, error, status
 
     def __getattr__(self, name: str) -> Any:
@@ -150,6 +154,31 @@ def _print_themes(themes: List[Worklet]) -> None:
         print(f"BUSINESS NEEDS:\n{needs}\n")
         print(f"SELECTED STAGES: {len(stages)} | L3: {len(l3)} | L2: {len(l2)}")
         print("=" * 80)
+
+
+def _worklet_to_dict(theme: Worklet) -> Dict[str, Any]:
+    """The generated theme worklet as a plain dict: top-level fields + the properties list."""
+    props = []
+    for p in theme.properties:
+        if isinstance(p, dict):
+            props.append({"propertyName": p.get("propertyName"), "propertyValue": p.get("propertyValue")})
+        else:
+            props.append({"propertyName": p.property_name, "propertyValue": p.property_value})
+    return {
+        "id": getattr(theme, "id", None),
+        "sourceId": getattr(theme, "source_id", None),
+        "parentWorkletId": getattr(theme, "parent_worklet_id", None),
+        "workletType": str(getattr(theme, "worklet_type", None)),
+        "properties": props,
+    }
+
+
+def _print_worklets_json(themes: List[Worklet]) -> None:
+    """Worklet mode: the exact generated THEME worklet(s) as JSON (long text shortened)."""
+    print("\n" + "=" * 80)
+    print(f"# worklet mode: {len(themes)} generated THEME worklet(s)")
+    for theme in themes:
+        print(json.dumps(_shorten_strings(_worklet_to_dict(theme)), indent=2))
 
 
 def _register_bundled_nltk_data() -> None:
@@ -275,7 +304,9 @@ async def main(args: argparse.Namespace) -> None:
             handler = ThemeGenerationHandler(service, platform, CONFIG_PATH)
             if args.only == "all":
                 themes = await handler.run(er_worklet, vs_worklets)
-                _print_themes(themes)
+                _print_themes(themes)                       # current human-readable print mode
+                if args.worklet:
+                    _print_worklets_json(themes)            # worklet mode: full worklet JSON
                 if args.coverage:
                     _run_coverage(er_worklet, raw_text, themes)
             else:
@@ -344,5 +375,7 @@ if __name__ == "__main__":
                         help="file holding the ticket raw text fed to generation (default raw_text.txt)")
     parser.add_argument("--coverage", action="store_true",
                         help="run coverage analysis on the generated themes (only with --only all)")
+    parser.add_argument("--worklet", action="store_true",
+                        help="worklet mode: print each generated THEME worklet as JSON (only with --only all)")
     main_args = parser.parse_args()
     asyncio.run(main(main_args))
