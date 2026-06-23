@@ -94,11 +94,11 @@ Attached properties:
 | `trigger` | the VS trigger (from the catalogue) |
 | `title` | `"<ticket title> -- <value stream name>"` |
 | `description` | the value stream's framing paragraph over the shared body |
-| `Business Needs` | the Business Needs document (text; structure is inside the text) |
+| `businessNeeds` | the Business Needs document (text; structure is inside the text) |
 | `generatedByLLM` | `true` |
 | `selectedStages` | list of selected stages (see type below) |
-| `L3 Business Capability` | list of selected L3 capabilities |
-| `L2 Business Capability` | list of derived L2 capabilities |
+| `l3BusinessCapability` | list of selected L3 capabilities |
+| `l2BusinessCapability` | list of derived L2 capabilities |
 
 ---
 
@@ -170,7 +170,7 @@ def analysis_property(result: list) -> dict   # -> the worklet "analysis" proper
 
 `analyze_worklet` scores the themes against the ER worklet's **`rawText`** property only — the raw
 ticket text generation was grounded on. There is no fallback; the ANALYSE payload must carry
-`rawText`. On the generated side, only the theme **`description`** and **`Business Needs`** texts are
+`rawText`. On the generated side, only the theme **`description`** and **`businessNeeds`** texts are
 scored — nothing else.
 
 ### Output — the `analysis` property
@@ -213,7 +213,7 @@ serialized with `model_dump()` (camelCase on the wire).
 | `stageDescription` | str | catalogue scope |
 | `entranceCriteria` / `exitCriteria` | str | catalogue scope |
 
-**`L3Capability`** (`L3 Business Capability` entries) — the list holds the selected capabilities only
+**`L3Capability`** (`l3BusinessCapability` entries) — the list holds the selected capabilities only
 
 | field | type | notes |
 | --- | --- | --- |
@@ -222,7 +222,7 @@ serialized with `model_dump()` (camelCase on the wire).
 | `stageId` | str | the stage this L3 belongs to |
 | `levelTwoId` / `levelTwoName` | str | parent L2 |
 
-**`L2Capability`** (`L2 Business Capability` entries) — derived 1:1 from the selected L3
+**`L2Capability`** (`l2BusinessCapability` entries) — derived 1:1 from the selected L3
 
 | field | type | notes |
 | --- | --- | --- |

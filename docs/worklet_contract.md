@@ -84,11 +84,11 @@ worklet; the caller persists the same stub.
 | `trigger` | the VS trigger (from the catalogue) |
 | `title` | `"<idmt ticket title> -- <vs name>"` |
 | `description` | per-VS framing paragraph over the shared body |
-| `Business Needs` | the Business Needs text for this value stream |
+| `businessNeeds` | the Business Needs text for this value stream |
 | `generatedByLLM` | `True` |
 | `selectedStages` | list of selected stages (`SelectedStage.model_dump()`) |
-| `L3 Business Capability` | selected L3 capabilities (`L3Capability.model_dump()`) |
-| `L2 Business Capability` | derived L2 capabilities (`L2Capability.model_dump()`) |
+| `l3BusinessCapability` | selected L3 capabilities (`L3Capability.model_dump()`) |
+| `l2BusinessCapability` | derived L2 capabilities (`L2Capability.model_dump()`) |
 
 The value-stream attributes are carried onto the theme worklet so the API has the full VS data on the
 theme without a second lookup.
@@ -129,5 +129,5 @@ Not retried (fail fast): `400`, `401`, `403`, `404`, `500` (the gateway folds re
   (`value_stream_name` / `value_stream_description`) instead — the catalogue already reads that table.
 - **`vs_id` source:** `source_id` falls back to `id`. This is the SQL join key, so it must be the VSR
   id of the approved value stream.
-- Property names with spaces (`Business Needs`, `L3 Business Capability`, `L2 Business Capability`)
-  are intentional — they match the existing worklet property naming.
+- All output property names are camelCase (`businessNeeds`, `l3BusinessCapability`,
+  `l2BusinessCapability`, …) — the worklet contract sends camelCase only.

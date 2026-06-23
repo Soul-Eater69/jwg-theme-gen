@@ -247,10 +247,10 @@ The five calls' outputs are attached onto each incoming THEME stub (one per valu
 | `valueStreamId` / `valueStreamName` / `valueStreamDescription` / `valueProposition` / `trigger` | the VS catalogue attributes (carried onto the theme) |
 | `title` | `"<ticket title> -- <vs name>"` |
 | `description` | framing paragraph (call 2) + shared body (call 1) |
-| `Business Needs` | call 5 |
+| `businessNeeds` | call 5 |
 | `selectedStages` | call 3, resolved against the catalogue |
-| `L3 Business Capability` | call 4, resolved against the catalogue |
-| `L2 Business Capability` | derived in code from the selected L3 |
+| `l3BusinessCapability` | call 4, resolved against the catalogue |
+| `l2BusinessCapability` | derived in code from the selected L3 |
 
 Full worklet shape and field tables: see [api_integration.md](api_integration.md) and
 [worklet_contract.md](worklet_contract.md).
@@ -269,7 +269,7 @@ because it is the other half of the theme-generation contract. Entry point:
 | Read | From | Used as |
 | --- | --- | --- |
 | source text | ER worklet `rawText` property (only — no fallback) | the context to score against |
-| generated text | each theme's `description` + `Business Needs` properties | the text being scored |
+| generated text | each theme's `description` + `businessNeeds` properties | the text being scored |
 
 Internally it builds this evaluator dataset (the property names match the evaluator's existing
 contract — `acceptanceCriteria` for the source, `title`/`description` for the generated side; the

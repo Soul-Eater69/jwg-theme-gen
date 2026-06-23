@@ -110,11 +110,11 @@ class ThemeProps:
     TRIGGER = "trigger"
     TITLE = "title"
     DESCRIPTION = "description"
-    BUSINESS_NEEDS = "Business Needs"
+    BUSINESS_NEEDS = "businessNeeds"
     GENERATED_BY_LLM = "generatedByLLM"
     SELECTED_STAGES = "selectedStages"
-    L3 = "L3 Business Capability"
-    L2 = "L2 Business Capability"
+    L3 = "l3BusinessCapability"
+    L2 = "l2BusinessCapability"
 
 
 def value_stream_id(theme_stub: Worklet) -> str:

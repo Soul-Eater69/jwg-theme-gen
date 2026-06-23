@@ -50,7 +50,7 @@ class CoverageAnalysisService:
     # Theme property names read off the generated worklet (match ``theme.worklet_mapper.ThemeProps``
     # without importing the generator stack).
     THEME_DESCRIPTION_PROPERTY = "description"
-    THEME_BUSINESS_NEEDS_PROPERTY = "Business Needs"
+    THEME_BUSINESS_NEEDS_PROPERTY = "businessNeeds"
 
     # ER worklet property used as the source context: the raw ticket text generation was grounded on.
     ER_RAW_TEXT_PROPERTY = "rawText"
