@@ -28,7 +28,26 @@ import sys
 # Put this folder (worklet_data_api stub) and the repo root (jwg_app) on the path BEFORE importing
 # the handler, so `from worklet_data_api import Worklet` resolves to the stub.
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+
+
+def _find_repo_root(start: str) -> str:
+    """Walk up from ``start`` to the dir that holds ``configs/user_config.yaml`` (the repo root).
+
+    Location-independent: works whether this script sits one or several folders under the repo root.
+    Falls back to two-levels-up if nothing is found.
+    """
+    d = start
+    for _ in range(8):
+        if os.path.isfile(os.path.join(d, "configs", "user_config.yaml")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return os.path.abspath(os.path.join(start, "..", ".."))
+
+
+ROOT = _find_repo_root(HERE)
 for _p in (HERE, ROOT):
     if _p not in sys.path:
         sys.path.insert(0, _p)
@@ -301,7 +320,7 @@ async def main(args: argparse.Namespace) -> None:
     try:
         async with session_scope() as session:
             service = _build_real_service(session)
-            handler = ThemeGenerationHandler(service, platform, CONFIG_PATH)
+            handler = ThemeGenerationHandler(service, platform, args.config_path)
             if args.only == "all":
                 themes = await handler.run(er_worklet, vs_worklets)
                 _print_themes(themes)                       # current human-readable print mode
@@ -377,5 +396,9 @@ if __name__ == "__main__":
                         help="run coverage analysis on the generated themes (only with --only all)")
     parser.add_argument("--worklet", action="store_true",
                         help="worklet mode: print each generated THEME worklet as JSON (only with --only all)")
+    parser.add_argument("--config-path", default=CONFIG_PATH,
+                        help=f"path to user_config.yaml (default: auto-found at {CONFIG_PATH})")
     main_args = parser.parse_args()
+    if not os.path.isfile(main_args.config_path):
+        raise SystemExit(f"# config not found: {main_args.config_path} (pass --config-path)")
     asyncio.run(main(main_args))
