@@ -200,10 +200,13 @@ class CoverageAnalysisService:
 def _load_default_evaluator() -> CoverageEvaluator:
     try:
         from text_evaluation.ngram_evaluation import NgramEvaluator
-    except ImportError as exc:
-        raise RuntimeError(
-            "Coverage analysis requires text_evaluation.ngram_evaluation.NgramEvaluator"
-        ) from exc
+    except ImportError:
+        try:  # the class may live in the submodule rather than be re-exported by the package
+            from text_evaluation.ngram_evaluation.ngram_evaluator import NgramEvaluator
+        except ImportError as exc:
+            raise RuntimeError(
+                f"Coverage analysis requires text_evaluation.ngram_evaluation.NgramEvaluator: {exc}"
+            ) from exc
     return NgramEvaluator()
 
 
