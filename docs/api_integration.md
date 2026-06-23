@@ -215,7 +215,7 @@ scored — nothing else.
 }
 ```
 
-`Metric` objects are serialized to plain dicts automatically (`_to_jsonable`), so the property drops
+`Metric` objects are serialized to plain dicts automatically (via each metric's `as_dict()`), so the property drops
 straight into the API JSON. Requires the `text_evaluation.ngram_evaluation.NgramEvaluator` package and
 NLTK `stopwords`/`punkt` data on the path.
 

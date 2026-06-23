@@ -173,11 +173,14 @@ def test_analyze_worklet_overwrites_analysis_on_rerun():
 
 
 class _FakeMetric:
-    """Stands in for the evaluator's Metric object (attribute-based -> serialized via __dict__)."""
+    """Stands in for the evaluator's Metric object: serialized via its ``as_dict()`` (like the real one)."""
 
     def __init__(self, metric_name, metric_value):
         self.metric_name = metric_name
         self.metric_value = metric_value
+
+    def as_dict(self):
+        return {"metric_name": self.metric_name, "metric_value": self.metric_value}
 
 
 def test_analysis_property_serializes_metric_objects():

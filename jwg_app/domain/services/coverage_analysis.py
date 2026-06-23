@@ -137,7 +137,7 @@ class CoverageAnalysisService:
             creativity_color=creativity_color,
         )
         result = self._get_evaluator().evaluate(dataset)
-        return [_to_jsonable(metric) for metric in result]
+        return [_serialize_metric(metric) for metric in result]
 
     def analysis_property(self, analysis: list[Any]) -> dict[str, Any]:
         """Wrap evaluator output in the ``analysis`` worklet property from the API contract.
@@ -148,7 +148,7 @@ class CoverageAnalysisService:
         """
         return {
             "propertyName": self.ANALYSIS_PROPERTY,
-            "propertyValue": [_to_jsonable(metric) for metric in analysis],
+            "propertyValue": [_serialize_metric(metric) for metric in analysis],
         }
 
     def build_dataset(
@@ -211,29 +211,16 @@ def _enum_value(value: Any) -> str:
     return value.value if hasattr(value, "value") else str(value)
 
 
-def _to_jsonable(obj: Any) -> Any:
-    """Recursively convert evaluator output (Metric objects) to JSON-serializable values.
+def _serialize_metric(metric: Any) -> Any:
+    """Serialize one evaluator metric to a JSON-safe ``{"metric_name", "metric_value"}`` dict.
 
-    A ``Metric`` exposes ``as_dict()`` (its own ``{"metric_name": ..., "metric_value": {...}}``
-    serialization) - use it, then recurse so the values inside are normalized too. Dicts/lists
-    recurse; a pydantic model uses ``model_dump``; other plain objects fall back to ``__dict__``;
-    everything else is stringified.
+    ``text_evaluation.Metric`` exposes ``as_dict()`` - its own serialization, with JSON-native values
+    (the scorers return ``float`` / ``list[float]`` / ``str``, no numpy). Use it; anything already a
+    plain dict (or other already-serialized value) is returned as is.
     """
-    if obj is None or isinstance(obj, (str, int, float, bool)):
-        return obj
-    if isinstance(obj, dict):
-        return {key: _to_jsonable(value) for key, value in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_to_jsonable(item) for item in obj]
-    if hasattr(obj, "as_dict") and callable(obj.as_dict):  # text_evaluation Metric
-        return _to_jsonable(obj.as_dict())
-    if hasattr(obj, "model_dump"):  # pydantic model
-        return _to_jsonable(obj.model_dump())
-    if hasattr(obj, "_asdict"):  # namedtuple
-        return _to_jsonable(obj._asdict())
-    if hasattr(obj, "__dict__"):  # plain object
-        return _to_jsonable(vars(obj))
-    return str(obj)
+    if hasattr(metric, "as_dict") and callable(metric.as_dict):
+        return metric.as_dict()
+    return metric
 
 
 def _get_property(worklet: Worklet, name: str, default: Any = None) -> Any:

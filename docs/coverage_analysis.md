@@ -66,7 +66,8 @@ ids, not free text, so they are not coverage-scored.)
 
 `analyze(...)` builds this, runs the evaluator, and returns one entry per metric (Coverage,
 Creativity) **already converted to JSON-safe dicts** - the evaluator hands back `Metric` objects,
-which `analyze` serializes (`_to_jsonable`) so the result can be returned/serialized directly.
+which `analyze` serializes via each metric's `as_dict()` so the result can be returned/serialized
+directly.
 `analysis_property(result)` wraps those dicts as the `analysis` worklet property the API sets on the
 ER:
 
@@ -93,8 +94,8 @@ ER:
 }
 ```
 
-The `Metric` objects aren't natively JSON-serializable, so `analysis_property` runs them through a
-recursive `_to_jsonable` pass (pydantic `model_dump` / `__dict__` / dict / list) before wrapping -
+The `Metric` objects expose `as_dict()` (their own `{metric_name, metric_value}` serialization, with
+JSON-native values), so `analysis_property` calls that on each before wrapping -
 the result drops straight into a worklet property and the API response. The caller upserts this
 property on the **ER** worklet (the analysis scores how well the generated themes cover the ER).
 
