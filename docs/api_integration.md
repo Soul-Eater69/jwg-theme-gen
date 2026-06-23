@@ -118,8 +118,7 @@ Written properties:
   ] },
   { "propertyName": "l3BusinessCapability", "propertyValue": [
       { "id": "CAP00000097", "name": "Eligibility Check", "description": "Verify member eligibility",
-        "stageId": "VSS00074614", "levelTwoId": "CAP00000036", "levelTwoName": "Claim Adjudication",
-        "levelTwoDescription": "..." }
+        "stageId": "VSS00074614", "levelTwoId": "CAP00000036" }
   ] },
   { "propertyName": "l2BusinessCapability", "propertyValue": [
       { "id": "CAP00000036", "name": "Claim Adjudication", "description": "..." }
@@ -248,7 +247,7 @@ serialized with `model_dump()` (camelCase on the wire).
 | `id` | str | L3 capability id (CAP…) |
 | `name` / `description` | str | |
 | `stageId` | str | the stage this L3 belongs to |
-| `levelTwoId` / `levelTwoName` / `levelTwoDescription` | str | parent L2 (id, name, description) |
+| `levelTwoId` | str | parent L2 id — the link; the L2's name/description live on the `l2BusinessCapability` entry, not duplicated here |
 
 **`L2Capability`** (`l2BusinessCapability` entries) — the deduped L2 rollup of the selected L3
 

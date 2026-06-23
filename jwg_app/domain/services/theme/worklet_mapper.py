@@ -207,7 +207,11 @@ def to_theme_worklet(
         ThemeProps.BUSINESS_NEEDS: business_needs,
         ThemeProps.GENERATED_BY_LLM: True,
         ThemeProps.SELECTED_STAGES: [s.model_dump() for s in selected_stages],
-        ThemeProps.L3: [c.model_dump() for c in l3],
+        # L3 stores levelTwoId (the link) only; the L2 name/description live on the L2 entry, not
+        # duplicated here. (level_two_name/description stay on the model so derive_l2 can build L2.)
+        ThemeProps.L3: [
+            c.model_dump(exclude={"level_two_name", "level_two_description"}) for c in l3
+        ],
         ThemeProps.L2: [c.model_dump() for c in l2],
     }
     return Worklet(

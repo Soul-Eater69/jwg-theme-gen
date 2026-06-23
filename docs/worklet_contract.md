@@ -99,7 +99,7 @@ Example of the written properties:
   ] },
   { "propertyName": "l3BusinessCapability", "propertyValue": [
       { "id": "CAP00000097", "name": "Eligibility Check", "description": "...",
-        "stageId": "VSS00074614", "levelTwoId": "CAP00000036", "levelTwoName": "Claim Adjudication" }
+        "stageId": "VSS00074614", "levelTwoId": "CAP00000036" }
   ] },
   { "propertyName": "l2BusinessCapability", "propertyValue": [
       { "id": "CAP00000036", "name": "Claim Adjudication", "description": "..." }
