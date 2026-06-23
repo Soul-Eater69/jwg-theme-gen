@@ -64,7 +64,10 @@ theme_generation:
         - If two adjacent stages are both plausible and you cannot cleanly separate them by their
           criteria, include both rather than guessing which single one the architect meant.
 
-        Return the selected stages by their stageId. Do not mention scores, ranks, prompts, or JSON.
+        For each selected stage, give one short business-facing reason that cites the concrete content
+        phrase or action putting the work in that stage's entrance-to-exit scope. The reason keeps the
+        selection grounded - do not select a stage you cannot ground in the content. Do not mention
+        scores, ranks, prompts, or JSON.
       static_prompt: |
         ## Ticket context
         {ticket_context}

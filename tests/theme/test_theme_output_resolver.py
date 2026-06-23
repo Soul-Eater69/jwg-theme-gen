@@ -35,13 +35,14 @@ def test_resolve_stages_keeps_valid_picks_with_canonical_name():
         value_streams=[
             VsStageSelection(
                 value_stream_id="vs1",
-                selected_stages=[SelectedStage(stage_id="st1", stage_name="echoed")],
+                selected_stages=[SelectedStage(stage_id="st1", stage_name="echoed", reason="why st1")],
             )
         ]
     )
     out = resolver.resolve_stages(picks, stage_lists)
     assert [s.stage_id for s in out["vs1"]] == ["st1"]
     assert out["vs1"][0].stage_name == "Alpha"  # canonical catalogue name, not the model's echo
+    assert out["vs1"][0].reason == "why st1"  # the model's grounding is carried through
     # scope is carried from the catalogue so downstream prompts see the full stage
     assert out["vs1"][0].stage_description == "Alpha desc"
     assert out["vs1"][0].entrance_criteria == "Alpha in"

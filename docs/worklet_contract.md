@@ -69,7 +69,7 @@ catalogue service (`ThemeService` / `ValueStreamCatalogue`).
 ## 3. Output — the enriched THEME stubs
 
 `to_theme_worklet` **attaches the generated content onto the incoming THEME stub in place** and
-returns the same stub. It writes **only** the six properties below (overwritten on a re-run); the
+returns the same stub. It writes **only** the seven properties below (overwritten on a re-run); the
 stub's existing properties, identity, type, and `parentWorkletId` are untouched. No value-stream
 attributes are written.
 
@@ -80,9 +80,10 @@ attributes are written.
 | `title` | `"<idmt ticket title> -- <vs name>"` |
 | `description` | per-VS framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs text for this value stream |
-| `selectedStages` | list of selected stages (`SelectedStage.model_dump()`) |
-| `l3BusinessCapability` | selected L3 capabilities (`L3Capability.model_dump()`) |
-| `l2BusinessCapability` | derived L2 capabilities (`L2Capability.model_dump()`) |
+| `generatedByLLM` | `True` |
+| `selectedStages` | selected stages, stored fields only: `stageId`, `stageName`, `reason` (scope used internally, not stored) |
+| `l3BusinessCapability` | selected L3 capabilities (`L3Capability.model_dump()`, incl. description) |
+| `l2BusinessCapability` | derived L2 capabilities (`L2Capability.model_dump()`, incl. description) |
 
 Example of the written properties:
 
@@ -91,9 +92,10 @@ Example of the written properties:
   { "propertyName": "title",          "propertyValue": "CareWay+ commercial claims activation -- Claims Adjudication" },
   { "propertyName": "description",    "propertyValue": "<framing paragraph over the shared body>" },
   { "propertyName": "businessNeeds",  "propertyValue": "<Business Needs document text>" },
+  { "propertyName": "generatedByLLM", "propertyValue": true },
   { "propertyName": "selectedStages", "propertyValue": [
       { "stageId": "VSS00074614", "stageName": "Eligibility Determination",
-        "stageDescription": "...", "entranceCriteria": "...", "exitCriteria": "..." }
+        "reason": "<why the work falls in this stage>" }
   ] },
   { "propertyName": "l3BusinessCapability", "propertyValue": [
       { "id": "CAP00000097", "name": "Eligibility Check", "description": "...",

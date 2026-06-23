@@ -91,13 +91,18 @@ class ValueStreamCatalogue(BaseModel):
 class SelectedStage(CamelModel):
     """A stage the work runs through. Name and scope (description, entrance/exit) are canonical from
     the catalogue: the model echoes the name as a selection anchor and we overwrite it - and fill the
-    scope - on resolve, so downstream prompts (business needs, capabilities) see the full stage."""
+    scope - on resolve, so downstream prompts (business needs, capabilities) see the full stage. The
+    scope is used internally only; the worklet stores just ``stage_id`` / ``stage_name`` / ``reason``.
+
+    ``reason`` is the model's grounding - one short justification citing the content that puts the work
+    in this stage - which keeps selections grounded and is stored on the worklet."""
 
     stage_id: str
     stage_name: str = ""
     stage_description: str = ""
     entrance_criteria: str = ""
     exit_criteria: str = ""
+    reason: str = ""
 
 
 # The raw model picks ``agenerate`` validates against; the handler resolves them against the

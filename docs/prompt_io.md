@@ -140,17 +140,20 @@ Entrance: eligibility decided | Exit: benefit priced
     {
       "valueStreamId": "VSR00074584",
       "selectedStages": [
-        { "stageId": "VSS00074614", "stageName": "Eligibility Determination" }
+        { "stageId": "VSS00074614", "stageName": "Eligibility Determination",
+          "reason": "the ticket adjudicates members' claims, which runs through eligibility" }
       ]
     }
   ]
 }
 ```
 
-The model returns `stageId` (+ echoes `stageName`). On resolve we keep only ids that belong to the
-value stream, **overwrite the name + fill the scope** from the catalogue, drop unknown ids, move a
-stage placed under the wrong value stream back to its owner, and — if a VS got no valid pick — fall
-back to all of its stages (never empty). See [resolve internals](#resolution-how-picks-are-cleaned).
+The model returns `stageId` (+ echoes `stageName`) and a `reason` that cites the content (grounding —
+it must justify each pick, which curbs over-selection). On resolve we keep only ids that belong to the
+value stream, **overwrite the name + fill the scope** from the catalogue, carry the model's `reason`
+through, drop unknown ids, move a stage placed under the wrong value stream back to its owner, and —
+if a VS got no valid pick — fall back to all of its stages (never empty). The worklet stores only
+`stageId` / `stageName` / `reason`. See [resolve internals](#resolution-how-picks-are-cleaned).
 
 ---
 
@@ -242,7 +245,7 @@ Value proposition: Accurate, timely claim adjudication and pricing
 
 The five calls' outputs are attached onto each incoming THEME stub (one per value stream):
 
-Only these six generated properties are written onto the theme stub; no value-stream attributes are
+Only these seven generated properties are written onto the theme stub; no value-stream attributes are
 added.
 
 | Property | From |
@@ -250,6 +253,7 @@ added.
 | `title` | `"<ticket title> -- <vs name>"` |
 | `description` | framing paragraph (call 2) + shared body (call 1) |
 | `businessNeeds` | call 5 |
+| `generatedByLLM` | constant `true` |
 | `selectedStages` | call 3, resolved against the catalogue |
 | `l3BusinessCapability` | call 4, resolved against the catalogue |
 | `l2BusinessCapability` | derived in code from the selected L3 |

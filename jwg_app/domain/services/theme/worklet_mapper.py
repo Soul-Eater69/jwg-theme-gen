@@ -106,6 +106,7 @@ class ThemeProps:
     TITLE = "title"
     DESCRIPTION = "description"
     BUSINESS_NEEDS = "businessNeeds"
+    GENERATED_BY_LLM = "generatedByLLM"
     SELECTED_STAGES = "selectedStages"
     L3 = "l3BusinessCapability"
     L2 = "l2BusinessCapability"
@@ -202,7 +203,12 @@ def to_theme_worklet(
         ThemeProps.TITLE: title,
         ThemeProps.DESCRIPTION: description,
         ThemeProps.BUSINESS_NEEDS: business_needs,
-        ThemeProps.SELECTED_STAGES: [s.model_dump() for s in selected_stages],
+        ThemeProps.GENERATED_BY_LLM: True,
+        # stages store only id, name, and reason; the catalogue scope is used internally, not stored.
+        ThemeProps.SELECTED_STAGES: [
+            s.model_dump(include={"stage_id", "stage_name", "reason"}) for s in selected_stages
+        ],
+        # L3 / L2 keep their full shape, including description.
         ThemeProps.L3: [c.model_dump() for c in l3],
         ThemeProps.L2: [c.model_dump() for c in l2],
     }

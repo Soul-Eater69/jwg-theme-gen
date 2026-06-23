@@ -118,15 +118,15 @@ def _keep_known_stages(
 ) -> list[SelectedStage]:
     """Keep the picks that name a real stage of this value stream; if none do, use every stage."""
     by_id = {s.stage_id: s for s in stages}
-    kept = [p.stage_id for p in chosen if p.stage_id in by_id]
-    kept = kept or [s.stage_id for s in stages]
+    kept = [(p.stage_id, p.reason) for p in chosen if p.stage_id in by_id]
+    kept = kept or [(s.stage_id, "") for s in stages]  # nothing valid -> all stages, no reason
     out: list[SelectedStage] = []
     seen: set[str] = set()
-    for stage_id in kept:
+    for stage_id, reason in kept:
         if stage_id in seen:
             continue
         seen.add(stage_id)
-        out.append(_to_selected(by_id[stage_id]))
+        out.append(_to_selected(by_id[stage_id], reason))
     return out
 
 
@@ -174,14 +174,15 @@ def _reassign_misplaced(
             target.append(make(real_parent, item_id))
 
 
-def _to_selected(stage: ValueStage) -> SelectedStage:
-    """Build a SelectedStage from a catalogue stage, carrying its name and full scope."""
+def _to_selected(stage: ValueStage, reason: str = "") -> SelectedStage:
+    """Build a SelectedStage from a catalogue stage, carrying its name, full scope, and the reason."""
     return SelectedStage(
         stage_id=stage.stage_id,
         stage_name=stage.stage_name,
         stage_description=stage.stage_description,
         entrance_criteria=stage.entrance_criteria,
         exit_criteria=stage.exit_criteria,
+        reason=reason,
     )
 
 
