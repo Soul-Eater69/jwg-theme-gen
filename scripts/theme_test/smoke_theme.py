@@ -238,12 +238,9 @@ def _run_coverage(er_worklet: Worklet, raw_text: str, themes: List[Worklet]) -> 
     try:
         # analyze_worklet attaches the ``analysis`` property to the ER worklet in place.
         analyzed = service.analyze_worklet(er_worklet=er_worklet, themes=themes)
-    except Exception as exc:
-        # The n-gram evaluator (text_evaluation + NLTK data) may be unavailable; show why, then the
-        # dataset that WOULD be scored.
-        print(f"# evaluator unavailable: {type(exc).__name__}: {exc}")
-        if exc.__cause__:
-            print(f"#   cause: {type(exc.__cause__).__name__}: {exc.__cause__}")
+    except RuntimeError as exc:
+        # The n-gram evaluator (text_evaluation) is a prod dependency; print the dataset instead.
+        print(f"# evaluator unavailable: {exc}")
         print("# dataset that WOULD be scored (long text shortened):")
         print(json.dumps(_shorten_strings(dataset), indent=2, default=str))
         return
