@@ -53,8 +53,8 @@ class ValueStreamCatalogueRepository:
         try:
             result = await self.session.execute(self._query(ids))
             return result.all()
-        except Exception as e:
-            logger.error(f"Error reading value-stream catalogue: {e}")
+        except Exception:
+            logger.exception("Error reading value-stream catalogue")
             raise
 
     @staticmethod

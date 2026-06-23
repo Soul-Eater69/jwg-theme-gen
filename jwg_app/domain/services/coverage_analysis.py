@@ -233,7 +233,18 @@ def _to_jsonable(obj: Any) -> Any:
 
 
 def _get_property(worklet: Worklet, name: str, default: Any = None) -> Any:
+    """Read a worklet property by name, tolerating both object- and dict-shaped property entries.
+
+    The worklet's properties may be ``PropertyObject``-like (``property_name`` / ``propertyName``
+    attributes) or plain ``{"propertyName", "propertyValue"}`` dicts; handle both so coverage does not
+    silently score against an empty string.
+    """
     for prop in getattr(worklet, "properties", []) or []:
+        if isinstance(prop, dict):
+            prop_name = prop.get("propertyName", prop.get("property_name"))
+            if prop_name == name:
+                return prop.get("propertyValue", prop.get("property_value", default))
+            continue
         prop_name = getattr(prop, "property_name", getattr(prop, "propertyName", None))
         if prop_name == name:
             return getattr(prop, "property_value", getattr(prop, "propertyValue", default))

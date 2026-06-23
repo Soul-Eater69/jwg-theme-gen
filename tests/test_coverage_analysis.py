@@ -39,6 +39,24 @@ def _theme(description, business_needs):
     )
 
 
+def test_reads_dict_shaped_theme_properties():
+    # some worklet variants carry properties as {"propertyName", "propertyValue"} dicts;
+    # coverage must read those too, not score against empty strings.
+    theme = _Worklet(
+        [
+            {"propertyName": CoverageAnalysisService.THEME_DESCRIPTION_PROPERTY, "propertyValue": "the desc"},
+            {"propertyName": CoverageAnalysisService.THEME_BUSINESS_NEEDS_PROPERTY, "propertyValue": "the needs"},
+        ]
+    )
+    dataset = CoverageAnalysisService().build_dataset(raw_text="raw", themes=[theme])
+    assert dataset["generated_text"] == [
+        [
+            {"propertyValue": "the needs", "propertyName": "title"},
+            {"propertyValue": "the desc", "propertyName": "description"},
+        ]
+    ]
+
+
 def test_build_dataset_uses_existing_evaluator_property_names():
     service = CoverageAnalysisService()
 
