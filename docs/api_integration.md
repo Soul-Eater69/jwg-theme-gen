@@ -129,7 +129,8 @@ Nothing to pass - both are inside the handler:
   decoding), so the model is forced to match the schema - it cannot rename, omit, or mistype a field.
   Built from the call's schema; no config needed.
 - **Transport retry.** Transient gateway failures (`429, 502, 503, 504`) are retried; `400/401/403/
-  404/500` fail fast. Defaults (`RetryConfig` in `jwg_app/domain/services/theme/config.py`):
+  404/500` fail fast. Defaults (`RetryConfig` in
+  `jwg_app/infrastructure/external/retry_config.py` - shared, reusable by other LLM-calling modules):
   3 attempts, ~1s fixed delay + jitter (not exponential).
 - **Validation retry.** A `200` whose body does not match the schema (or is malformed JSON) is
   re-sampled, up to the same attempt count, before surfacing a `503`. Strict output makes this rare;
