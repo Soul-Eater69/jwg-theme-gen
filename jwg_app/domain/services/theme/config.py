@@ -1,33 +1,17 @@
 """Theme generation tuning config.
 
 Knobs the handler reads but that are not prompt/model content (which live in user_config.yaml).
-Injected into the handler with sensible defaults; tests and callers can override.
+Injected into the handler with sensible defaults; tests and callers can override. The LLM retry
+policy is the shared ``RetryConfig`` (so other generation modules reuse the same one).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import FrozenSet
 
+from jwg_app.infrastructure.external.retry_config import RetryConfig
 
-@dataclass(frozen=True)
-class RetryConfig:
-    """Retry policy for transient LLM gateway failures (rate limit / 5xx / timeout).
-
-    Bounded and non-exponential: a small fixed delay (plus jitter) keeps worst-case latency
-    predictable across the 4+N calls and within the API request time budget.
-    """
-
-    enabled: bool = True
-    max_attempts: int = 3  # total attempts per call (1 = no retry)
-    delay_seconds: float = 1.0  # base delay between attempts; a small jitter is added
-    # Only clearly-transient statuses. 500 is excluded: the gateway folds real bugs (bad payload,
-    # config) into 500, so retrying it just burns attempts - fail fast and surface the error.
-    retryable_status: FrozenSet[int] = frozenset({429, 502, 503, 504})
-
-    def attempts(self) -> int:
-        """Total attempts to make: ``max_attempts`` when enabled, else a single attempt."""
-        return self.max_attempts if self.enabled else 1
+__all__ = ["RetryConfig", "ThemeGenerationConfig"]
 
 
 @dataclass(frozen=True)

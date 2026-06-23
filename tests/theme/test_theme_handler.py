@@ -18,7 +18,7 @@ from jwg_app.domain.models.theme_generation import (
     ValueStreamCatalogue,
 )
 from jwg_app.domain.services.theme import worklet_mapper as mapper
-from jwg_app.domain.services.theme.config import RetryConfig
+from jwg_app.infrastructure.external.retry_config import RetryConfig
 from jwg_app.domain.services.theme_generation_handler import ThemeGenerationHandler
 
 CONFIG_PATH = str(Path(__file__).resolve().parents[2] / "configs" / "user_config.yaml")
