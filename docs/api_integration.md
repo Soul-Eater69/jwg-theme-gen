@@ -79,7 +79,7 @@ but not read.
 
 ### 2.3 Output — the enriched THEME stubs (one per value stream)
 
-`run` returns the **same THEME stubs it was given**, edited in place. It writes **only** the seven
+`run` returns the **same THEME stubs it was given**, edited in place. It writes **only** the six
 generated properties below (overwritten on a re-run, not duplicated); the stub's existing properties
 are left untouched.
 
@@ -88,7 +88,6 @@ are left untouched.
 | `title` | `"<ticket title> -- <value stream name>"` |
 | `description` | the value stream's framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs document (text; structure is inside the text) |
-| `generatedByLLM` | `true` |
 | `selectedStages` | list of selected stages (see type below) |
 | `l3BusinessCapability` | list of selected L3 capabilities |
 | `l2BusinessCapability` | list of derived L2 capabilities |
@@ -100,7 +99,6 @@ are left untouched.
   { "propertyName": "title",          "propertyValue": "CareWay+ commercial claims activation -- Claims Adjudication" },
   { "propertyName": "description",    "propertyValue": "Under Claims Adjudication, ... <framing> ... <shared body> ..." },
   { "propertyName": "businessNeeds",  "propertyValue": "Eligibility Determination\n- The plan must ... <needs document> ..." },
-  { "propertyName": "generatedByLLM", "propertyValue": true },
   { "propertyName": "selectedStages", "propertyValue": [
       { "stageId": "VSS00074614", "stageName": "Eligibility Determination",
         "stageDescription": "Determine member eligibility for the claim",

@@ -242,7 +242,7 @@ Value proposition: Accurate, timely claim adjudication and pricing
 
 The five calls' outputs are attached onto each incoming THEME stub (one per value stream):
 
-Only these seven generated properties are written onto the theme stub; no value-stream attributes are
+Only these six generated properties are written onto the theme stub; no value-stream attributes are
 added.
 
 | Property | From |
