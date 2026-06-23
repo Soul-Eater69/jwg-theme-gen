@@ -212,10 +212,12 @@ def _enum_value(value: Any) -> str:
 
 
 def _to_jsonable(obj: Any) -> Any:
-    """Recursively convert evaluator output (e.g. Metric objects) to JSON-serializable values.
+    """Recursively convert evaluator output (Metric objects) to JSON-serializable values.
 
-    A pydantic ``Metric`` becomes ``{"metric_name": ..., "metric_value": {...}}`` via ``model_dump``;
-    dicts/lists recurse; plain objects fall back to their ``__dict__``; everything else is stringified.
+    A ``Metric`` exposes ``as_dict()`` (its own ``{"metric_name": ..., "metric_value": {...}}``
+    serialization) - use it, then recurse so the values inside are normalized too. Dicts/lists
+    recurse; a pydantic model uses ``model_dump``; other plain objects fall back to ``__dict__``;
+    everything else is stringified.
     """
     if obj is None or isinstance(obj, (str, int, float, bool)):
         return obj
@@ -223,7 +225,9 @@ def _to_jsonable(obj: Any) -> Any:
         return {key: _to_jsonable(value) for key, value in obj.items()}
     if isinstance(obj, (list, tuple)):
         return [_to_jsonable(item) for item in obj]
-    if hasattr(obj, "model_dump"):  # pydantic Metric
+    if hasattr(obj, "as_dict") and callable(obj.as_dict):  # text_evaluation Metric
+        return _to_jsonable(obj.as_dict())
+    if hasattr(obj, "model_dump"):  # pydantic model
         return _to_jsonable(obj.model_dump())
     if hasattr(obj, "_asdict"):  # namedtuple
         return _to_jsonable(obj._asdict())
