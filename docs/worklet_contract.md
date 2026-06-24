@@ -47,6 +47,9 @@ So the stub only needs to carry the **`valueStreamId`** property (the catalogue 
 description, value proposition, trigger, stages, and L3/L2 capabilities all come from SQL — see the
 catalogue service (`ThemeService` / `ValueStreamCatalogue`).
 
+The VS worklet's **`businessValueStream`** property is also read and **carried over as-is** onto the
+generated theme worklet (so the API/service layer doesn't have to re-add it).
+
 ### VS fields used per prompt
 
 `ticket_context` (raw text + ER signals) goes to every prompt. The VS fields are used as follows:
@@ -69,13 +72,14 @@ catalogue service (`ThemeService` / `ValueStreamCatalogue`).
 ## 3. Output — a generated THEME worklet per value stream
 
 `to_theme_worklet` **creates a new THEME worklet** for each value stream: `workletType = THEME`,
-`parentWorkletId =` the VS worklet's `id`, `sourceId` carried down from the VS worklet, and the seven
-generated properties below. The input VS worklet is not modified.
+`parentWorkletId =` the VS worklet's `id`, `sourceId` carried down from the VS worklet, and the
+properties below. The input VS worklet is not modified.
 
 **Properties written**
 
 | Property name | Content |
 | --- | --- |
+| `businessValueStream` | carried over from the VS worklet as-is (e.g. `"Acquire Asset {VSR00074583}"`) |
 | `summary` | `"<idmt ticket title> - <vs name>"` |
 | `description` | per-VS framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs text for this value stream |
@@ -92,6 +96,7 @@ Example of the written properties:
 
 ```json
 [
+  { "propertyName": "businessValueStream", "propertyValue": "Acquire Asset {VSR00074583}" },
   { "propertyName": "summary",        "propertyValue": "CareWay+ commercial claims activation - Claims Adjudication" },
   { "propertyName": "description",    "propertyValue": "<framing paragraph over the shared body>" },
   { "propertyName": "businessNeeds",  "propertyValue": "<Business Needs document text>" },

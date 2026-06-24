@@ -246,11 +246,13 @@ Value proposition: Accurate, timely claim adjudication and pricing
 The five calls' outputs make up each generated THEME worklet (one per value stream), parented to its
 value-stream worklet:
 
-These seven properties make up the generated theme worklet (whose `parentWorkletId` is the VS
-worklet's id and whose type is `THEME`):
+These seven generated properties make up the theme worklet (whose `parentWorkletId` is the VS
+worklet's id and whose type is `THEME`). One more, `businessValueStream`, is **carried over** from the
+VS worklet (not prompt-generated):
 
 | Property | From |
 | --- | --- |
+| `businessValueStream` | carried from the VS worklet (not generated) |
 | `summary` | `"<ticket title> - <vs name>"` |
 | `description` | framing paragraph (call 2) + shared body (call 1) |
 | `businessNeeds` | call 5 |

@@ -73,10 +73,11 @@ theme for every one in a single call. From **each** VS worklet, two things are r
 | --- | --- |
 | value-stream id (e.g. `VS10000372`) | `valueStreamId` **property** (the catalogue lookup key) |
 | the VS worklet's own id | `id` (becomes the generated theme's `parentWorkletId`) |
+| `businessValueStream` | property — **carried over** onto the theme worklet as-is |
 
-**Only the `valueStreamId` property and the worklet `id`.** Name, description, value proposition,
-trigger, stages, and capabilities all come from SQL (the catalogue), keyed by the `valueStreamId`.
-Nothing is written back onto the VS worklet.
+**The `valueStreamId` property, the worklet `id`, and `businessValueStream`.** Name, description, value
+proposition, trigger, stages, and capabilities all come from SQL (the catalogue), keyed by the
+`valueStreamId`. Nothing is written back onto the VS worklet.
 
 ### 2.3 Output — a newly generated THEME worklet per value stream
 
@@ -88,12 +89,13 @@ generated worklet has:
 | `workletType` | `THEME` |
 | `parentWorkletId` | the value-stream worklet's `id` |
 | `sourceId` | carried down from the value-stream worklet |
-| `properties` | the seven generated properties below |
+| `properties` | the eight properties below (`businessValueStream` is carried from the VS worklet; the rest are generated) |
 
 Written properties:
 
 | Property written | Value |
 | --- | --- |
+| `businessValueStream` | carried over from the VS worklet (e.g. `"Acquire Asset {VSR00074583}"`) |
 | `summary` | `"<ticket title> - <value stream name>"` |
 | `description` | the value stream's framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs document (text; structure is inside the text) |
@@ -109,6 +111,7 @@ not lists: the key is the catalogue id and the value is `"<name> {<id>}"`.
 
 ```json
 [
+  { "propertyName": "businessValueStream", "propertyValue": "Acquire Asset {VSR00074583}" },
   { "propertyName": "summary",        "propertyValue": "CareWay+ commercial claims activation - Claims Adjudication" },
   { "propertyName": "description",    "propertyValue": "Under Claims Adjudication, ... <framing> ... <shared body> ..." },
   { "propertyName": "businessNeeds",  "propertyValue": "Eligibility Determination\n- The plan must ... <needs document> ..." },

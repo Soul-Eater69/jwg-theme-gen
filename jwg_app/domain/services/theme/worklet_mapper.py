@@ -104,6 +104,7 @@ class ERProps:
 
 class ThemeProps:
     VALUE_STREAM_ID = "valueStreamId"  # input only: the business VS id (the SQL catalogue key)
+    BUSINESS_VALUE_STREAM = "businessValueStream"  # carried over from the VS worklet onto the theme
     SUMMARY = "summary"
     DESCRIPTION = "description"
     BUSINESS_NEEDS = "businessNeeds"
@@ -208,6 +209,10 @@ def to_theme_worklet(
         A new THEME worklet parented to ``vs_worklet``.
     """
     properties = {
+        # carried straight over from the input VS worklet (e.g. "Acquire Asset {VSR00074583}")
+        ThemeProps.BUSINESS_VALUE_STREAM: get_property(
+            vs_worklet, ThemeProps.BUSINESS_VALUE_STREAM, ""
+        ),
         ThemeProps.SUMMARY: summary,
         ThemeProps.DESCRIPTION: description,
         ThemeProps.BUSINESS_NEEDS: business_needs,

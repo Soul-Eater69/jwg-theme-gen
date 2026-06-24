@@ -59,9 +59,14 @@ def _er():
 
 def _vs_worklet(vs_id):
     # A VALUE_STREAM worklet: its id becomes the theme's parentWorkletId; the valueStreamId PROPERTY
-    # carries the VS id (the catalogue lookup key).
+    # carries the VS id (the catalogue lookup key); businessValueStream is carried onto the theme.
     return _Worklet(
-        id=f"vswlet-{vs_id}", source_id="t1", properties=[_Prop("valueStreamId", vs_id)]
+        id=f"vswlet-{vs_id}",
+        source_id="t1",
+        properties=[
+            _Prop("valueStreamId", vs_id),
+            _Prop("businessValueStream", f"Value Stream {{{vs_id}}}"),
+        ],
     )
 
 
@@ -286,6 +291,9 @@ def test_produces_one_theme_per_value_stream():
     # each theme is a new THEME worklet parented to its value-stream worklet
     assert [t.parent_worklet_id for t in themes] == ["vswlet-vs1", "vswlet-vs2"]
     assert all(str(t.worklet_type) in ("WorkletType.THEME", "THEME") for t in themes)
+    # businessValueStream is carried over from each VS worklet onto its theme
+    bvs = [mapper.get_property(t, mapper.ThemeProps.BUSINESS_VALUE_STREAM, "") for t in themes]
+    assert bvs == ["Value Stream {vs1}", "Value Stream {vs2}"]
     for theme in themes:
         # selectedStages is an {id: "name {id}"} map, one entry per selected stage
         tags = mapper.get_property(theme, mapper.ThemeProps.SELECTED_STAGES, {})
