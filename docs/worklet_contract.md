@@ -118,27 +118,46 @@ Example of the written properties:
 
 ## Failure handling
 
-Generation is **all-or-nothing**: `run()` returns `list[Worklet]` (one theme per value stream) only
-when *every* value stream succeeds; otherwise it raises `CustomException` and returns nothing. There
-are no partial results and no per-theme failure flags - the UI either shows the full set or a clean
-error, which is the right contract when failed themes aren't surfaced in the UI and there is no
-per-theme regeneration.
+Generation is **partial-success**: `run()` always returns `list[Worklet]` (one worklet per value
+stream), and each worklet is **either** a generated theme **or** a failure worklet. The two are told
+apart by the presence of a `generationError` property.
 
-Every value stream is attempted **before** the request fails. Every error is logged (`logger.error`)
-before it surfaces, so an aborted request is traceable in the logs as well as the response.
+The calls split into two tiers:
 
-### Error reference
+- **Shared calls** — description body, framing, stage selection, capability selection — produce data
+  for *every* theme. If any fails, **no** theme can be built, so **every** value stream comes back as
+  a failure worklet (`run()` does not raise).
+- **Per-value-stream** — business needs (and the no-stages guard). A failure here affects only that
+  value stream: it becomes a failure worklet, and the rest are returned as normal themes.
 
-| Status | Condition |
+`run()` only **raises** when there is nothing to return at all: missing ER/VS worklets (`404`) or
+Azure SQL unavailable (`503`). Every error is logged (`logger.error`) before it surfaces.
+
+### Failure worklet shape
+
+Same THEME envelope as a generated theme (parented to its VS worklet, `businessValueStream` carried),
+with the generated content replaced by a single `generationError` (the error detail string):
+
+```json
+[
+  { "propertyName": "businessValueStream", "propertyValue": "Acquire Asset {VSR00074583}" },
+  { "propertyName": "generationError",     "propertyValue": "LLM service unavailable: needs gateway down" }
+]
+```
+
+### Outcome reference
+
+| Outcome | Condition |
 | --- | --- |
-| `404` | ER worklet or VS worklet not found |
-| `503` | Azure SQL service unavailable |
-| `503` | LLM service unavailable (description body/framing, stage selection, capabilities, or any value stream's business needs) |
-| `400` | A value stream resolved no stages (defensive; not expected, since an approved value stream has governed stages) |
+| raises `404` | ER worklet or VS worklet not found |
+| raises `503` | Azure SQL service unavailable |
+| every VS = failure worklet | a shared call (description body/framing, stage or capability selection) is unavailable or its output fails schema validation |
+| that VS = failure worklet | business needs unavailable, or a value stream resolved no stages |
 
 Note: when the LLM selects no stage for a value stream, the resolver falls back to all of that value
 stream's catalogue stages (not a failure). There is no retry - each LLM call is made once, and any
-failure (non-200, no data, or a body that fails schema validation) surfaces a `503` immediately.
+failure (non-200, no data, or a body that fails schema validation) becomes a `generationError`
+immediately.
 
 ---
 

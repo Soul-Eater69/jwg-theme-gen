@@ -113,6 +113,8 @@ class ThemeProps:
     SELECTED_STAGES = "selectedStages"
     L3 = "l3BusinessCapabilityModel"
     L2 = "l2BusinessCapabilityModel"
+    # Failure worklets carry this instead of the generated content (the error detail text).
+    GENERATION_ERROR = "generationError"
 
 
 def value_stream_id(vs_worklet: Worklet) -> str:
@@ -176,6 +178,49 @@ def _id_label_map(items: Sequence[Any], *, id_of, name_of) -> dict[str, str]:
     return {id_of(i): f"{name_of(i)} {{{id_of(i)}}}" for i in items}
 
 
+def _theme_worklet(vs_worklet: Worklet, properties: dict[str, Any]) -> Worklet:
+    """Build a THEME worklet parented to the value-stream worklet from a property-name -> value map.
+
+    Shared by the success and failure builders: both produce the same THEME envelope (type, parent
+    id, source id) and differ only in which properties they carry.
+    """
+    return Worklet(
+        worklet_type=WorkletType.THEME,
+        parent_worklet_id=vs_worklet.id,
+        source_id=vs_worklet.source_id,
+        properties=[
+            {"propertyName": name, "propertyValue": value} for name, value in properties.items()
+        ],
+    )
+
+
+def to_failed_theme_worklet(vs_worklet: Worklet, error: str) -> Worklet:
+    """
+    Build a THEME worklet that records a generation failure for one value stream.
+
+    Same envelope as a generated theme (parented to the VS worklet, ``businessValueStream`` carried
+    over), but the generated content is replaced by a single ``generationError`` property holding the
+    error detail. The caller returns these alongside the successful theme worklets, so a failed value
+    stream is surfaced in place instead of failing the whole request.
+
+    Args:
+        vs_worklet: The value-stream worklet whose theme could not be generated.
+        error: The error detail text to store in ``generationError``.
+
+    Returns:
+        A THEME worklet carrying ``businessValueStream`` and ``generationError``.
+    """
+    return _theme_worklet(
+        vs_worklet,
+        {
+            ThemeProps.BUSINESS_VALUE_STREAM: get_property(
+                vs_worklet, ThemeProps.BUSINESS_VALUE_STREAM, ""
+            ),
+            ThemeProps.GENERATION_ERROR: error,
+        },
+    )
+
+
 def to_theme_worklet(
     vs_worklet: Worklet,
     *,
@@ -208,26 +253,21 @@ def to_theme_worklet(
     Returns:
         A new THEME worklet parented to ``vs_worklet``.
     """
-    properties = {
-        # carried straight over from the input VS worklet (e.g. "Acquire Asset {VSR00074583}")
-        ThemeProps.BUSINESS_VALUE_STREAM: get_property(
-            vs_worklet, ThemeProps.BUSINESS_VALUE_STREAM, ""
-        ),
-        ThemeProps.SUMMARY: summary,
-        ThemeProps.DESCRIPTION: description,
-        ThemeProps.BUSINESS_NEEDS: business_needs,
-        ThemeProps.GENERATED_BY_LLM: True,
-        ThemeProps.SELECTED_STAGES: _id_label_map(
-            selected_stages, id_of=lambda s: s.stage_id, name_of=lambda s: s.stage_name
-        ),
-        ThemeProps.L3: _id_label_map(l3, id_of=lambda c: c.id, name_of=lambda c: c.name),
-        ThemeProps.L2: _id_label_map(l2, id_of=lambda c: c.id, name_of=lambda c: c.name),
-    }
-    return Worklet(
-        worklet_type=WorkletType.THEME,
-        parent_worklet_id=vs_worklet.id,
-        source_id=vs_worklet.source_id,
-        properties=[
-            {"propertyName": name, "propertyValue": value} for name, value in properties.items()
-        ],
+    return _theme_worklet(
+        vs_worklet,
+        {
+            # carried straight over from the input VS worklet (e.g. "Acquire Asset {VSR00074583}")
+            ThemeProps.BUSINESS_VALUE_STREAM: get_property(
+                vs_worklet, ThemeProps.BUSINESS_VALUE_STREAM, ""
+            ),
+            ThemeProps.SUMMARY: summary,
+            ThemeProps.DESCRIPTION: description,
+            ThemeProps.BUSINESS_NEEDS: business_needs,
+            ThemeProps.GENERATED_BY_LLM: True,
+            ThemeProps.SELECTED_STAGES: _id_label_map(
+                selected_stages, id_of=lambda s: s.stage_id, name_of=lambda s: s.stage_name
+            ),
+            ThemeProps.L3: _id_label_map(l3, id_of=lambda c: c.id, name_of=lambda c: c.name),
+            ThemeProps.L2: _id_label_map(l2, id_of=lambda c: c.id, name_of=lambda c: c.name),
+        },
     )

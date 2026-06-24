@@ -165,13 +165,19 @@ def build_vs_worklets() -> List[Worklet]:
 def _print_themes(themes: List[Worklet]) -> None:
     print(f"\n# generated {len(themes)} theme worklet(s)\n" + "=" * 80)
     for theme in themes:
+        print(f"THEME worklet: type={theme.worklet_type} parentWorkletId={theme.parent_worklet_id}")
+        error = mapper.get_property(theme, mapper.ThemeProps.GENERATION_ERROR, None)
+        if error is not None:
+            bvs = mapper.get_property(theme, mapper.ThemeProps.BUSINESS_VALUE_STREAM, "")
+            print(f"FAILED ({bvs}) - generationError: {error}")
+            print("=" * 80)
+            continue
         summary = mapper.get_property(theme, mapper.ThemeProps.SUMMARY, "")
         description = mapper.get_property(theme, mapper.ThemeProps.DESCRIPTION, "")
         needs = mapper.get_property(theme, mapper.ThemeProps.BUSINESS_NEEDS, "")
         tags = mapper.get_property(theme, mapper.ThemeProps.SELECTED_STAGES, {}) or {}
         l3 = mapper.get_property(theme, mapper.ThemeProps.L3, {}) or {}
         l2 = mapper.get_property(theme, mapper.ThemeProps.L2, {}) or {}
-        print(f"THEME worklet: type={theme.worklet_type} parentWorkletId={theme.parent_worklet_id}")
         print(f"SUMMARY: {summary}")
         print(f"DESCRIPTION:\n{description}\n")
         print(f"BUSINESS NEEDS:\n{needs}\n")

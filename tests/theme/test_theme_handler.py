@@ -183,32 +183,44 @@ def test_catalogue_failure_raises_503():
     assert exc.value.status_code == 503
 
 
-def test_vs_with_no_stages_raises_400():
-    # all-or-nothing: a value stream with no stages fails the whole request
+def _is_failed(theme):
+    return mapper.get_property(theme, mapper.ThemeProps.GENERATION_ERROR, None) is not None
+
+
+def test_vs_with_no_stages_returns_only_that_vs_failed():
+    # vs2 has no catalogue stages -> only vs2 comes back as a failure worklet; vs1 still succeeds.
     handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), FakePlatform(), CONFIG_PATH)
-    with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_vs_worklet("vs1"), _vs_worklet("vs2")]))
-    assert exc.value.status_code == 400
+    themes = asyncio.run(handler.run(_er(), [_vs_worklet("vs1"), _vs_worklet("vs2")]))
+    assert len(themes) == 2
+    by_parent = {t.parent_worklet_id: t for t in themes}
+    assert not _is_failed(by_parent["vswlet-vs1"])  # vs1 produced a real theme
+    assert _is_failed(by_parent["vswlet-vs2"])  # vs2 had no stages -> failure worklet
+    # the success worklet still carries the normal generated fields
+    assert mapper.get_property(by_parent["vswlet-vs1"], mapper.ThemeProps.SUMMARY, "")
 
 
-def test_non_retryable_llm_failure_raises_503():
-    handler = ThemeGenerationHandler(_catalogue_with_stages("vs1"), FailingPlatform(), CONFIG_PATH)
-    with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_vs_worklet("vs1")]))
-    assert exc.value.status_code == 503
+def test_shared_call_failure_fails_every_value_stream():
+    # FailingPlatform fails every call; the first shared call (description body) failing means no
+    # theme can be built for ANY value stream -> all come back as failure worklets (no raise).
+    handler = ThemeGenerationHandler(_catalogue_with_stages("vs1", "vs2"), FailingPlatform(), CONFIG_PATH)
+    themes = asyncio.run(handler.run(_er(), [_vs_worklet("vs1"), _vs_worklet("vs2")]))
+    assert len(themes) == 2
+    assert all(_is_failed(t) for t in themes)
+    # failure worklets keep the THEME envelope: parented to their VS worklet + businessValueStream
+    assert [t.parent_worklet_id for t in themes] == ["vswlet-vs1", "vswlet-vs2"]
+    assert all(mapper.get_property(t, mapper.ThemeProps.BUSINESS_VALUE_STREAM, "") for t in themes)
 
 
 @pytest.mark.parametrize(
     "schema", ["TextOut", "FramingsOut", "BatchedStageSelection", "BatchedCapabilitySelection"]
 )
-def test_any_core_call_failure_raises_503(schema):
-    # description body / framing / stage selection / capabilities are core: a failure raises and
-    # aborts the whole request (not a per-VS flag). (TextOut here is the body call, which runs first.)
+def test_any_shared_call_failure_fails_every_value_stream(schema):
+    # description body / framing / stage / capability selection are shared: a failure in any of them
+    # fails every value stream's worklet. (TextOut is the body call, which runs first.)
     platform = SchemaFailingPlatform(failing_schema=schema)
     handler = _handler(platform)
-    with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_vs_worklet("vs1")]))
-    assert exc.value.status_code == 503
+    themes = asyncio.run(handler.run(_er(), [_vs_worklet("vs1")]))
+    assert themes and all(_is_failed(t) for t in themes)
 
 
 def _handler(platform, catalogue=None):
@@ -269,12 +281,19 @@ def test_produces_one_theme_per_value_stream():
         assert sid in label and "{" in label  # value is "name {id}"
 
 
-# ---- all-or-nothing -------------------------------------------------------------------
+# ---- partial success (business needs is the per-VS decider) ---------------------------
 
-def test_any_vs_business_needs_failure_raises_503():
-    # one value stream's business needs fails -> the whole request fails (no partial result)
+def test_one_vs_business_needs_failure_returns_partial_set():
+    # vs1's business needs fails -> only vs1 is a failure worklet; vs2 is returned as a real theme.
     platform = BusinessNeedsFailingPlatform(failing_vs="vs1")
     handler = _handler(platform, catalogue=_catalogue_with_stages("vs1", "vs2"))
-    with pytest.raises(CustomException) as exc:
-        asyncio.run(handler.run(_er(), [_vs_worklet("vs1"), _vs_worklet("vs2")]))
-    assert exc.value.status_code == 503
+    themes = asyncio.run(handler.run(_er(), [_vs_worklet("vs1"), _vs_worklet("vs2")]))
+    assert len(themes) == 2
+    by_parent = {t.parent_worklet_id: t for t in themes}
+    assert _is_failed(by_parent["vswlet-vs1"])  # business needs failed -> failure worklet
+    assert not _is_failed(by_parent["vswlet-vs2"])  # vs2 produced a real theme
+    # the failure worklet carries the error text + still identifies its value stream
+    assert mapper.get_property(by_parent["vswlet-vs1"], mapper.ThemeProps.GENERATION_ERROR, "")
+    assert mapper.get_property(by_parent["vswlet-vs1"], mapper.ThemeProps.BUSINESS_VALUE_STREAM, "")
+    # the success worklet has the normal generated fields, not a generationError
+    assert mapper.get_property(by_parent["vswlet-vs2"], mapper.ThemeProps.SUMMARY, "")

@@ -43,9 +43,14 @@ The handler takes **only** those three. LLM retry is built in (see §4) - not a 
 
 ### What it returns
 
-A `list[Worklet]`, one **newly generated THEME** worklet per approved value stream, each parented to
-its value-stream worklet. All-or-nothing: either every value stream produces a theme, or `run()`
-raises (see §3). The caller persists the worklets.
+A `list[Worklet]`, one THEME worklet per approved value stream, each parented to its value-stream
+worklet. Each is **either** a generated theme worklet **or** a **failure worklet** carrying a
+`generationError` property (see §2.4). A shared-call failure (description body/framing, stage or
+capability selection) makes **every** value stream a failure worklet, since no theme can be built
+without that shared data; a per-value-stream failure (business needs unavailable, or no stages
+resolved) makes **only that** value stream a failure worklet and the rest are returned as normal
+themes. `run()` itself only raises when there is nothing to return (see §3). The caller persists the
+worklets and can split them on the presence of `generationError`.
 
 ---
 
@@ -129,24 +134,48 @@ not lists: the key is the catalogue id and the value is `"<name> {<id>}"`.
 ]
 ```
 
+### 2.4 Output — a failure worklet (when a value stream could not be generated)
+
+A value stream whose theme could not be generated comes back as a THEME worklet too (same envelope,
+parented to its VS worklet), but the generated content is replaced by a single `generationError`
+property. The caller tells the two apart by the presence of `generationError`.
+
+| Field | Value |
+| --- | --- |
+| `workletType` | `THEME` |
+| `parentWorkletId` | the value-stream worklet's `id` |
+| `sourceId` | carried down from the value-stream worklet |
+| `businessValueStream` | carried over from the VS worklet (so the failed row is still labelled) |
+| `generationError` | the error detail text (a string) |
+
+```json
+[
+  { "propertyName": "businessValueStream", "propertyValue": "Acquire Asset {VSR00074583}" },
+  { "propertyName": "generationError",     "propertyValue": "LLM service unavailable: needs gateway down" }
+]
+```
+
+When a **shared** call fails, every value stream comes back like this; when a **per-value-stream**
+call fails (business needs, or no stages), only that value stream does.
+
 ---
 
 ## 3. Errors (theme generation)
 
-`run()` raises `CustomException(status_code, detail)` (`jwg_app/domain/exceptions/custom_exception.py`).
-Every error is logged (`logger.error`) before it surfaces. Generation is all-or-nothing - any failure
-aborts the whole request.
+`run()` only **raises** `CustomException(status_code, detail)`
+(`jwg_app/domain/exceptions/custom_exception.py`) for failures that leave nothing to return. LLM-call
+failures do **not** raise - they come back as failure worklets (§2.4). Every error is logged
+(`logger.error`) before it surfaces.
 
-| Status | Condition |
+| Outcome | Condition |
 | --- | --- |
-| `404` | ER worklet or VS worklet not found (missing/empty input) |
-| `503` | Azure SQL service unavailable |
-| `503` | LLM service unavailable (any of: description body/framing, stage selection, capabilities, a value stream's business needs) |
-| `503` | LLM output failed schema validation |
-| `400` | A value stream resolved no stages (defensive; not expected for an approved value stream) |
+| raises `404` | ER worklet or VS worklet not found (missing/empty input) |
+| raises `503` | Azure SQL service unavailable |
+| failure worklet(s) | LLM service unavailable or output failed schema validation. A shared call (description body/framing, stage or capability selection) fails **every** value stream; business needs fails **only** that value stream. |
+| failure worklet | A value stream resolved no stages (defensive; not expected for an approved value stream) |
 
 There is no retry: each LLM call is made once. Any non-200 status, missing data, or schema-validation
-failure surfaces a `503` immediately (see §4).
+failure becomes a `generationError` (or raises, for Azure SQL) immediately (see §4).
 
 ---
 
@@ -251,8 +280,8 @@ to generation; the API team does not build it (the `ThemeService` does). It hold
 # theme generation (per ANALYSE/GENERATE request)
 catalogue = await get_theme_service(session)                     # ThemeCatalogueReader
 handler = ThemeGenerationHandler(catalogue, platform_client, USER_CONFIG_PATH)
-themes = await handler.run(er_worklet, vs_worklets)            # new THEME worklets per VS; raises on failure
-# persist `themes`
+themes = await handler.run(er_worklet, vs_worklets)            # one THEME worklet per VS (success or generationError)
+# persist `themes`; a worklet with a `generationError` property is a failed value stream
 
 # coverage (after generation, on the ER) - worklet in, the same worklet out
 service = CoverageAnalysisService()                              # default NgramEvaluator

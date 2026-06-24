@@ -50,6 +50,11 @@ from jwg_app.infrastructure.external.strict_schema import strict_response_format
 logger = logging.getLogger(__name__)
 
 
+def _error_detail(exc: BaseException) -> str:
+    """The error text stored in a failure worklet's ``generationError`` (CustomException detail or str)."""
+    return exc.detail if isinstance(exc, CustomException) else str(exc)
+
+
 class ThemeGenerationHandler:
     """
     Generates Jira THEME worklets from an engagement request and its approved value streams.
@@ -92,14 +97,17 @@ class ThemeGenerationHandler:
                 ``id`` becomes the generated theme worklet's ``parent_worklet_id``.
 
         Returns:
-            A new THEME worklet per value stream, parented to its value-stream worklet. The call is
-            all-or-nothing: either every value stream produces a theme, or the request raises.
+            One THEME worklet per value stream. Each is either a generated theme worklet or a
+            failure worklet carrying ``generationError`` (built by ``mapper.to_failed_theme_worklet``).
+            A shared/batched call failure (description body/framing, stage or capability selection)
+            fails every value stream's worklet, since no theme can be built without that data. A
+            per-value-stream failure (business needs unavailable, or no stages resolved) fails only
+            that value stream's worklet; the rest are returned as normal theme worklets.
 
         Raises:
-            CustomException: Aborts the whole request - 404 if the ER or VS worklets are missing; 503
-                if Azure SQL or any LLM call (description body/framing, stage selection, capabilities,
-                or a value stream's business needs) is unavailable; 400 if a value stream unexpectedly
-                resolved no stages. Every value stream is attempted before the request fails.
+            CustomException: Only for failures that leave nothing to return - 404 if the ER or VS
+                worklets are missing; 503 if Azure SQL is unavailable. LLM-call failures do not raise:
+                they surface as failure worklets in the returned list.
         """
         if er_worklet is None or not vs_worklets:
             logger.error("theme generation aborted (404): ER worklet or VS worklet not found")
@@ -128,26 +136,33 @@ class ThemeGenerationHandler:
             er.idmt_ticket_title, len(vs_list),
         )
 
-        # --- Core phase: batched, all-VS calls. Any failure here aborts the whole request. ---
+        # --- Shared phase: batched, all-VS calls (description body/framings, stage + capability
+        # selection). These produce data for every theme, so if any fails there is nothing to build
+        # ANY theme from -> every value stream comes back as a failure worklet (we do not raise).
         # Step 1 — ticket-level batched calls, in parallel. return_exceptions=True lets all three
-        # finish (no orphaned "never retrieved" tasks); we then re-raise the first core failure.
+        # finish (no orphaned "never retrieved" tasks).
         results = await asyncio.gather(
             self._description_body(er),
             self._description_framings(er, vs_list),
             self._stage_selection(er, vs_list, catalogue),
             return_exceptions=True,
         )
-        for result in results:
-            if isinstance(result, BaseException):
-                raise result  # a core call failed (CustomException 503) -> abort the request
-        body, framings, stages_by_vs = results
+        shared_failure = next((r for r in results if isinstance(r, BaseException)), None)
+        if shared_failure is None:
+            body, framings, stages_by_vs = results
+            try:
+                # Step 2 — capabilities (one merged call across all value streams).
+                l3_by_stage = await self._capability_selection(er, vs_list, stages_by_vs, catalogue)
+            except CustomException as exc:
+                shared_failure = exc
+        if shared_failure is not None:
+            detail = _error_detail(shared_failure)
+            logger.error("theme generation failed for all value streams: %s", detail)
+            return [mapper.to_failed_theme_worklet(w, detail) for w in vs_worklets]
 
-        # Step 2 — capabilities (one merged call across all value streams).
-        l3_by_stage = await self._capability_selection(er, vs_list, stages_by_vs, catalogue)
-
-        # --- Per-VS phase: each value stream's own flow (business needs + assembly). Every value
-        # stream is attempted before we decide; if ANY fails, the whole request fails -
-        # all-or-nothing, so the caller never receives a silently-incomplete set.
+        # --- Per-VS phase: each value stream's own flow (business needs + assembly). A failure here
+        # (business needs unavailable, or no stages resolved) only affects that value stream: its
+        # worklet comes back as a failure worklet, the rest are returned as normal theme worklets.
         results = await asyncio.gather(
             *(
                 self._build_theme(vs_wlet, vs_by_id[vs_id], er, stages_by_vs, l3_by_stage, body, framings)
@@ -155,14 +170,20 @@ class ThemeGenerationHandler:
             ),
             return_exceptions=True,
         )
-        for vs_id, result in zip(vs_ids, results):
+        themes: list[Worklet] = []
+        for vs_wlet, vs_id, result in zip(vs_worklets, vs_ids, results):
             if isinstance(result, BaseException):
-                detail = result.detail if isinstance(result, CustomException) else str(result)
+                detail = _error_detail(result)
                 logger.error("theme generation failed for value stream %s: %s", vs_id, detail)
-                raise result
+                themes.append(mapper.to_failed_theme_worklet(vs_wlet, detail))
+            else:
+                themes.append(result)
 
-        logger.info("theme generation finished: %d theme(s) produced", len(results))
-        return list(results)
+        succeeded = sum(1 for r in results if not isinstance(r, BaseException))
+        logger.info(
+            "theme generation finished: %d/%d theme(s) produced", succeeded, len(themes)
+        )
+        return themes
 
     async def _build_theme(
         self,
@@ -176,7 +197,8 @@ class ThemeGenerationHandler:
     ) -> Worklet:
         """Run one value stream's flow (business needs + assembly) and generate its THEME worklet.
 
-        Raises ``CustomException`` on failure; the caller aborts the whole request (all-or-nothing).
+        Raises ``CustomException`` on failure (no stages resolved, or business needs unavailable);
+        the caller turns that into a failure worklet for this value stream and continues with the rest.
         """
         stages = stages_by_vs.get(vs.vs_id, [])
         if not stages:

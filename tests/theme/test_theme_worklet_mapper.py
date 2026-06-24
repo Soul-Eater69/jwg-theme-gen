@@ -71,3 +71,31 @@ def test_native_methods_are_used_when_present():
 
     mapper.set_property(worklet, "title", "via-native")
     assert worklet.get_property_value("title") == "via-native"
+
+
+class _InputWorklet:
+    """A value-stream worklet (id + source_id + properties) used as input to the theme builders."""
+
+    def __init__(self, id, source_id, properties):
+        self.id = id
+        self.source_id = source_id
+        self.properties = properties
+
+
+def test_to_failed_theme_worklet_carries_bvs_and_error_only():
+    vs = _InputWorklet(
+        id="vswlet-1",
+        source_id="t1",
+        properties=[{"propertyName": "businessValueStream", "propertyValue": "Acquire Asset {VSR1}"}],
+    )
+    failed = mapper.to_failed_theme_worklet(vs, "boom")
+
+    # same THEME envelope as a generated theme: parented to the VS worklet, source id carried
+    assert str(failed.worklet_type) in ("WorkletType.THEME", "THEME")
+    assert failed.parent_worklet_id == "vswlet-1"
+    assert failed.source_id == "t1"
+    # carries businessValueStream + the error detail, and nothing generated
+    assert mapper.get_property(failed, mapper.ThemeProps.GENERATION_ERROR) == "boom"
+    assert mapper.get_property(failed, mapper.ThemeProps.BUSINESS_VALUE_STREAM) == "Acquire Asset {VSR1}"
+    assert mapper.get_property(failed, mapper.ThemeProps.SUMMARY) is None
+    assert mapper.get_property(failed, mapper.ThemeProps.SELECTED_STAGES) is None
