@@ -234,8 +234,11 @@ class GeneratorService:
                 status_code=er_validation["status_code"], detail=er_validation["detail"]
             )
 
-        # Step 3 - the generated THEME worklets to score (only valid themes are passed in).
+        # Step 3 - the generated THEME worklets to score. Drop failure worklets (a theme that failed
+        # generation carries a generationError and has no description/business needs) so they don't
+        # drag the score down - the coverage service assumes only valid themes.
         themes = await self._get_generated_themes_for_analysis(er_worklet)  # returns THEME worklets
+        themes = [t for t in themes if not t.get_property_value("generationError")]
 
         # Step 4 - score the themes (the coverage service returns the metrics; it does not mutate).
         analysis = self.coverage_service.analyze(er_worklet=er_worklet, themes=themes)
