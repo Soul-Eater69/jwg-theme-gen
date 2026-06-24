@@ -109,7 +109,7 @@ class ThemeProps:
     BUSINESS_NEEDS = "businessNeeds"
     GENERATED_BY_LLM = "generatedByLLM"
     # These three are id -> "name {id}" maps (key = the catalogue id), not lists.
-    SELECTED_TAGS = "selectedTags"
+    SELECTED_STAGES = "selectedStages"
     L3 = "l3BusinessCapabilityModel"
     L2 = "l2BusinessCapabilityModel"
 
@@ -212,7 +212,7 @@ def to_theme_worklet(
         ThemeProps.DESCRIPTION: description,
         ThemeProps.BUSINESS_NEEDS: business_needs,
         ThemeProps.GENERATED_BY_LLM: True,
-        ThemeProps.SELECTED_TAGS: _id_label_map(
+        ThemeProps.SELECTED_STAGES: _id_label_map(
             selected_stages, id_of=lambda s: s.stage_id, name_of=lambda s: s.stage_name
         ),
         ThemeProps.L3: _id_label_map(l3, id_of=lambda c: c.id, name_of=lambda c: c.name),

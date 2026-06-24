@@ -255,7 +255,7 @@ worklet's id and whose type is `THEME`):
 | `description` | framing paragraph (call 2) + shared body (call 1) |
 | `businessNeeds` | call 5 |
 | `generatedByLLM` | constant `true` |
-| `selectedTags` | call 3, resolved; stored as `{ stageId: "stageName {stageId}" }` |
+| `selectedStages` | call 3, resolved; stored as `{ stageId: "stageName {stageId}" }` |
 | `l3BusinessCapabilityModel` | call 4, resolved; stored as `{ capId: "name {capId}" }` |
 | `l2BusinessCapabilityModel` | derived from the selected L3; stored as `{ capId: "name {capId}" }` |
 

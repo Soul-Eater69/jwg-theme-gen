@@ -164,14 +164,14 @@ def _print_themes(themes: List[Worklet]) -> None:
         summary = mapper.get_property(theme, mapper.ThemeProps.SUMMARY, "")
         description = mapper.get_property(theme, mapper.ThemeProps.DESCRIPTION, "")
         needs = mapper.get_property(theme, mapper.ThemeProps.BUSINESS_NEEDS, "")
-        tags = mapper.get_property(theme, mapper.ThemeProps.SELECTED_TAGS, {}) or {}
+        tags = mapper.get_property(theme, mapper.ThemeProps.SELECTED_STAGES, {}) or {}
         l3 = mapper.get_property(theme, mapper.ThemeProps.L3, {}) or {}
         l2 = mapper.get_property(theme, mapper.ThemeProps.L2, {}) or {}
         print(f"THEME worklet: type={theme.worklet_type} parentWorkletId={theme.parent_worklet_id}")
         print(f"SUMMARY: {summary}")
         print(f"DESCRIPTION:\n{description}\n")
         print(f"BUSINESS NEEDS:\n{needs}\n")
-        print(f"SELECTED TAGS: {len(tags)} | L3: {len(l3)} | L2: {len(l2)}")
+        print(f"SELECTED STAGES: {len(tags)} | L3: {len(l3)} | L2: {len(l2)}")
         print("=" * 80)
 
 

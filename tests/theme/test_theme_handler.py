@@ -287,8 +287,8 @@ def test_produces_one_theme_per_value_stream():
     assert [t.parent_worklet_id for t in themes] == ["vswlet-vs1", "vswlet-vs2"]
     assert all(str(t.worklet_type) in ("WorkletType.THEME", "THEME") for t in themes)
     for theme in themes:
-        # selectedTags is an {id: "name {id}"} map, one entry per selected stage
-        tags = mapper.get_property(theme, mapper.ThemeProps.SELECTED_TAGS, {})
+        # selectedStages is an {id: "name {id}"} map, one entry per selected stage
+        tags = mapper.get_property(theme, mapper.ThemeProps.SELECTED_STAGES, {})
         assert len(tags) == 1
         (sid, label), = tags.items()
         assert sid in label and "{" in label  # value is "name {id}"

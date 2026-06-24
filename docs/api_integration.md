@@ -98,11 +98,11 @@ Written properties:
 | `description` | the value stream's framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs document (text; structure is inside the text) |
 | `generatedByLLM` | `true` |
-| `selectedTags` | `{ stageId: "stageName {stageId}" }` map (key = stage id) |
+| `selectedStages` | `{ stageId: "stageName {stageId}" }` map (key = stage id) |
 | `l3BusinessCapabilityModel` | `{ capId: "name {capId}" }` map (key = L3 cap id) |
 | `l2BusinessCapabilityModel` | `{ capId: "name {capId}" }` map (key = L2 cap id) |
 
-`selectedTags`, `l3BusinessCapabilityModel`, and `l2BusinessCapabilityModel` are **objects (maps)**,
+`selectedStages`, `l3BusinessCapabilityModel`, and `l2BusinessCapabilityModel` are **objects (maps)**,
 not lists: the key is the catalogue id and the value is `"<name> {<id>}"`.
 
 ### Example — the properties written onto one theme worklet
@@ -113,7 +113,7 @@ not lists: the key is the catalogue id and the value is `"<name> {<id>}"`.
   { "propertyName": "description",    "propertyValue": "Under Claims Adjudication, ... <framing> ... <shared body> ..." },
   { "propertyName": "businessNeeds",  "propertyValue": "Eligibility Determination\n- The plan must ... <needs document> ..." },
   { "propertyName": "generatedByLLM", "propertyValue": true },
-  { "propertyName": "selectedTags", "propertyValue": {
+  { "propertyName": "selectedStages", "propertyValue": {
       "VSS00074614": "Eligibility Determination {VSS00074614}"
   } },
   { "propertyName": "l3BusinessCapabilityModel", "propertyValue": {
@@ -227,7 +227,7 @@ properties.
 
 ## 6. Types reference
 
-`selectedTags`, `l3BusinessCapabilityModel`, and `l2BusinessCapabilityModel` are all the **same map
+`selectedStages`, `l3BusinessCapabilityModel`, and `l2BusinessCapabilityModel` are all the **same map
 shape**:
 
 ```json
@@ -236,7 +236,7 @@ shape**:
 
 | Property | key | value |
 | --- | --- | --- |
-| `selectedTags` | stage id (VSS…) | `"<stageName> {<stageId>}"` |
+| `selectedStages` | stage id (VSS…) | `"<stageName> {<stageId>}"` |
 | `l3BusinessCapabilityModel` | L3 cap id (CAP…) | `"<l3Name> {<l3Id>}"` |
 | `l2BusinessCapabilityModel` | L2 cap id (CAP…) | `"<l2Name> {<l2Id>}"` |
 

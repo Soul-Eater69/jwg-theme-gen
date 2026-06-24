@@ -80,11 +80,11 @@ generated properties below. The input VS worklet is not modified.
 | `description` | per-VS framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs text for this value stream |
 | `generatedByLLM` | `True` |
-| `selectedTags` | `{ stageId: "stageName {stageId}" }` map (key = stage id) |
+| `selectedStages` | `{ stageId: "stageName {stageId}" }` map (key = stage id) |
 | `l3BusinessCapabilityModel` | `{ capId: "name {capId}" }` map (key = L3 cap id) |
 | `l2BusinessCapabilityModel` | `{ capId: "name {capId}" }` map (key = L2 cap id) |
 
-`selectedTags` / `l3BusinessCapabilityModel` / `l2BusinessCapabilityModel` are **maps**, not lists:
+`selectedStages` / `l3BusinessCapabilityModel` / `l2BusinessCapabilityModel` are **maps**, not lists:
 key = the catalogue id, value = `"<name> {<id>}"`. (The stage scope and reason, and the L2↔L3↔stage
 links, are used internally during generation but not stored on these maps.)
 
@@ -96,7 +96,7 @@ Example of the written properties:
   { "propertyName": "description",    "propertyValue": "<framing paragraph over the shared body>" },
   { "propertyName": "businessNeeds",  "propertyValue": "<Business Needs document text>" },
   { "propertyName": "generatedByLLM", "propertyValue": true },
-  { "propertyName": "selectedTags", "propertyValue": {
+  { "propertyName": "selectedStages", "propertyValue": {
       "VSS00074614": "Eligibility Determination {VSS00074614}"
   } },
   { "propertyName": "l3BusinessCapabilityModel", "propertyValue": {
@@ -145,5 +145,5 @@ Not retried (fail fast): `400`, `401`, `403`, `404`, `500` (the gateway folds re
   (`value_stream_name` / `value_stream_description`) instead — the catalogue already reads that table.
 - **`vs_id` source:** `source_id` falls back to `id`. This is the SQL join key, so it must be the VSR
   id of the approved value stream.
-- All output property names are camelCase (`businessNeeds`, `l3BusinessCapability`,
-  `l2BusinessCapability`, …) — the worklet contract sends camelCase only.
+- All output property names are camelCase (`summary`, `businessNeeds`, `selectedStages`,
+  `l3BusinessCapabilityModel`, `l2BusinessCapabilityModel`) — the worklet contract sends camelCase only.
