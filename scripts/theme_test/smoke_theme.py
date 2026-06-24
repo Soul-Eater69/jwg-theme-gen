@@ -161,17 +161,17 @@ def build_vs_worklets() -> List[Worklet]:
 def _print_themes(themes: List[Worklet]) -> None:
     print(f"\n# generated {len(themes)} theme worklet(s)\n" + "=" * 80)
     for theme in themes:
-        title = mapper.get_property(theme, mapper.ThemeProps.TITLE, "")
+        summary = mapper.get_property(theme, mapper.ThemeProps.SUMMARY, "")
         description = mapper.get_property(theme, mapper.ThemeProps.DESCRIPTION, "")
         needs = mapper.get_property(theme, mapper.ThemeProps.BUSINESS_NEEDS, "")
-        stages = mapper.get_property(theme, mapper.ThemeProps.SELECTED_STAGES, []) or []
-        l3 = mapper.get_property(theme, mapper.ThemeProps.L3, []) or []
-        l2 = mapper.get_property(theme, mapper.ThemeProps.L2, []) or []
+        tags = mapper.get_property(theme, mapper.ThemeProps.SELECTED_TAGS, {}) or {}
+        l3 = mapper.get_property(theme, mapper.ThemeProps.L3, {}) or {}
+        l2 = mapper.get_property(theme, mapper.ThemeProps.L2, {}) or {}
         print(f"THEME worklet: type={theme.worklet_type} parentWorkletId={theme.parent_worklet_id}")
-        print(f"TITLE: {title}")
+        print(f"SUMMARY: {summary}")
         print(f"DESCRIPTION:\n{description}\n")
         print(f"BUSINESS NEEDS:\n{needs}\n")
-        print(f"SELECTED STAGES: {len(stages)} | L3: {len(l3)} | L2: {len(l2)}")
+        print(f"SELECTED TAGS: {len(tags)} | L3: {len(l3)} | L2: {len(l2)}")
         print("=" * 80)
 
 

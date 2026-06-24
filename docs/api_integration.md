@@ -94,35 +94,35 @@ Written properties:
 
 | Property written | Value |
 | --- | --- |
-| `title` | `"<ticket title> - <value stream name>"` |
+| `summary` | `"<ticket title> - <value stream name>"` |
 | `description` | the value stream's framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs document (text; structure is inside the text) |
 | `generatedByLLM` | `true` |
-| `selectedStages` | list of selected stages (see type below) |
-| `l3BusinessCapability` | list of selected L3 capabilities |
-| `l2BusinessCapability` | list of derived L2 capabilities |
+| `selectedTags` | `{ stageId: "stageName {stageId}" }` map (key = stage id) |
+| `l3BusinessCapabilityModel` | `{ capId: "name {capId}" }` map (key = L3 cap id) |
+| `l2BusinessCapabilityModel` | `{ capId: "name {capId}" }` map (key = L2 cap id) |
+
+`selectedTags`, `l3BusinessCapabilityModel`, and `l2BusinessCapabilityModel` are **objects (maps)**,
+not lists: the key is the catalogue id and the value is `"<name> {<id>}"`.
 
 ### Example — the properties written onto one theme worklet
 
 ```json
 [
-  { "propertyName": "title",          "propertyValue": "CareWay+ commercial claims activation - Claims Adjudication" },
+  { "propertyName": "summary",        "propertyValue": "CareWay+ commercial claims activation - Claims Adjudication" },
   { "propertyName": "description",    "propertyValue": "Under Claims Adjudication, ... <framing> ... <shared body> ..." },
   { "propertyName": "businessNeeds",  "propertyValue": "Eligibility Determination\n- The plan must ... <needs document> ..." },
   { "propertyName": "generatedByLLM", "propertyValue": true },
-  { "propertyName": "selectedStages", "propertyValue": [
-      { "stageId": "VSS00074614", "stageName": "Eligibility Determination",
-        "stageDescription": "Determine member eligibility for the claim",
-        "entranceCriteria": "claim registered", "exitCriteria": "eligibility decided",
-        "reason": "the ticket adjudicates CareWay+ members' claims, which runs through eligibility" }
-  ] },
-  { "propertyName": "l3BusinessCapability", "propertyValue": [
-      { "id": "CAP00000097", "name": "Eligibility Check", "description": "Verify member eligibility",
-        "stageId": "VSS00074614", "levelTwoId": "CAP00000036" }
-  ] },
-  { "propertyName": "l2BusinessCapability", "propertyValue": [
-      { "id": "CAP00000036", "name": "Claim Adjudication", "description": "..." }
-  ] }
+  { "propertyName": "selectedTags", "propertyValue": {
+      "VSS00074614": "Eligibility Determination {VSS00074614}"
+  } },
+  { "propertyName": "l3BusinessCapabilityModel", "propertyValue": {
+      "CAP00000364": "Account Analytics and Reporting {CAP00000364}",
+      "CAP00000220": "Account Association Management {CAP00000220}"
+  } },
+  { "propertyName": "l2BusinessCapabilityModel", "propertyValue": {
+      "CAP00000036": "Claim Adjudication {CAP00000036}"
+  } }
 ]
 ```
 
@@ -227,37 +227,21 @@ properties.
 
 ## 6. Types reference
 
-Domain models (`jwg_app/domain/models/theme_generation.py`). The list-property values above are these,
-serialized with `model_dump()` (camelCase on the wire).
+`selectedTags`, `l3BusinessCapabilityModel`, and `l2BusinessCapabilityModel` are all the **same map
+shape**:
 
-**`selectedStages`** entries
+```json
+{ "<catalogue id>": "<name> {<catalogue id>}" }
+```
 
-| field | type | notes |
+| Property | key | value |
 | --- | --- | --- |
-| `stageId` | str | the catalogue stage id (VSS…) — the Jira Epic |
-| `stageName` | str | canonical catalogue name |
-| `stageDescription` | str | catalogue scope |
-| `entranceCriteria` / `exitCriteria` | str | catalogue scope |
-| `reason` | str | the model's grounding — why the work falls in this stage |
+| `selectedTags` | stage id (VSS…) | `"<stageName> {<stageId>}"` |
+| `l3BusinessCapabilityModel` | L3 cap id (CAP…) | `"<l3Name> {<l3Id>}"` |
+| `l2BusinessCapabilityModel` | L2 cap id (CAP…) | `"<l2Name> {<l2Id>}"` |
 
-**`L3Capability`** (`l3BusinessCapability` entries) — the list holds the selected capabilities only
-
-| field | type | notes |
-| --- | --- | --- |
-| `id` | str | L3 capability id (CAP…) |
-| `name` / `description` | str | |
-| `stageId` | str | the stage this L3 belongs to |
-| `levelTwoId` | str | parent L2 id — the link; the L2's name/description live on the `l2BusinessCapability` entry, not duplicated here |
-
-**`L2Capability`** (`l2BusinessCapability` entries) — the deduped L2 rollup of the selected L3
-
-| field | type | notes |
-| --- | --- | --- |
-| `id` | str | L2 capability id (CAP…) |
-| `name` / `description` | str | |
-
-No stage/L3 link on L2 — one L2 can parent L3s across several stages, so it carries only its own
-id/name/description; the L2↔L3↔stage links live on each L3 entry (`levelTwoId` + `stageId`).
+The L2↔L3↔stage relationships are not stored on these maps; they are recoverable from the catalogue
+(each stage's L3s, each L3's parent L2). One L2 can roll up L3s from several stages.
 
 **`ValueStreamCatalogue`** (what `ThemeCatalogueReader.fetch_theme_inputs` returns per VS) — internal
 to generation; the API team does not build it (the `ThemeService` does). It holds

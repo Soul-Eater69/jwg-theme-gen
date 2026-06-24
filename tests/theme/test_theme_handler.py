@@ -281,14 +281,17 @@ def test_produces_one_theme_per_value_stream():
     themes = asyncio.run(handler.run(_er(), [_vs_worklet("vs1"), _vs_worklet("vs2")]))
 
     assert len(themes) == 2
-    titles = [mapper.get_property(t, mapper.ThemeProps.TITLE, "") for t in themes]
-    assert all("Ticket Title" in t for t in titles)
+    summaries = [mapper.get_property(t, mapper.ThemeProps.SUMMARY, "") for t in themes]
+    assert all("Ticket Title" in s for s in summaries)
     # each theme is a new THEME worklet parented to its value-stream worklet
     assert [t.parent_worklet_id for t in themes] == ["vswlet-vs1", "vswlet-vs2"]
     assert all(str(t.worklet_type) in ("WorkletType.THEME", "THEME") for t in themes)
     for theme in themes:
-        stages = mapper.get_property(theme, mapper.ThemeProps.SELECTED_STAGES, [])
-        assert len(stages) == 1
+        # selectedTags is an {id: "name {id}"} map, one entry per selected stage
+        tags = mapper.get_property(theme, mapper.ThemeProps.SELECTED_TAGS, {})
+        assert len(tags) == 1
+        (sid, label), = tags.items()
+        assert sid in label and "{" in label  # value is "name {id}"
 
 
 # ---- all-or-nothing -------------------------------------------------------------------

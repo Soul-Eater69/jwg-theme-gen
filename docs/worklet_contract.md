@@ -76,34 +76,36 @@ generated properties below. The input VS worklet is not modified.
 
 | Property name | Content |
 | --- | --- |
-| `title` | `"<idmt ticket title> - <vs name>"` |
+| `summary` | `"<idmt ticket title> - <vs name>"` |
 | `description` | per-VS framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs text for this value stream |
 | `generatedByLLM` | `True` |
-| `selectedStages` | selected stages (`SelectedStage.model_dump()`: id, name, scope, reason) |
-| `l3BusinessCapability` | selected L3 capabilities (`L3Capability.model_dump()`, incl. description) |
-| `l2BusinessCapability` | derived L2 capabilities (`L2Capability.model_dump()`, incl. description) |
+| `selectedTags` | `{ stageId: "stageName {stageId}" }` map (key = stage id) |
+| `l3BusinessCapabilityModel` | `{ capId: "name {capId}" }` map (key = L3 cap id) |
+| `l2BusinessCapabilityModel` | `{ capId: "name {capId}" }` map (key = L2 cap id) |
+
+`selectedTags` / `l3BusinessCapabilityModel` / `l2BusinessCapabilityModel` are **maps**, not lists:
+key = the catalogue id, value = `"<name> {<id>}"`. (The stage scope and reason, and the L2↔L3↔stage
+links, are used internally during generation but not stored on these maps.)
 
 Example of the written properties:
 
 ```json
 [
-  { "propertyName": "title",          "propertyValue": "CareWay+ commercial claims activation - Claims Adjudication" },
+  { "propertyName": "summary",        "propertyValue": "CareWay+ commercial claims activation - Claims Adjudication" },
   { "propertyName": "description",    "propertyValue": "<framing paragraph over the shared body>" },
   { "propertyName": "businessNeeds",  "propertyValue": "<Business Needs document text>" },
   { "propertyName": "generatedByLLM", "propertyValue": true },
-  { "propertyName": "selectedStages", "propertyValue": [
-      { "stageId": "VSS00074614", "stageName": "Eligibility Determination",
-        "stageDescription": "...", "entranceCriteria": "...", "exitCriteria": "...",
-        "reason": "<why the work falls in this stage>" }
-  ] },
-  { "propertyName": "l3BusinessCapability", "propertyValue": [
-      { "id": "CAP00000097", "name": "Eligibility Check", "description": "...",
-        "stageId": "VSS00074614", "levelTwoId": "CAP00000036" }
-  ] },
-  { "propertyName": "l2BusinessCapability", "propertyValue": [
-      { "id": "CAP00000036", "name": "Claim Adjudication", "description": "..." }
-  ] }
+  { "propertyName": "selectedTags", "propertyValue": {
+      "VSS00074614": "Eligibility Determination {VSS00074614}"
+  } },
+  { "propertyName": "l3BusinessCapabilityModel", "propertyValue": {
+      "CAP00000364": "Account Analytics and Reporting {CAP00000364}",
+      "CAP00000220": "Account Association Management {CAP00000220}"
+  } },
+  { "propertyName": "l2BusinessCapabilityModel", "propertyValue": {
+      "CAP00000036": "Claim Adjudication {CAP00000036}"
+  } }
 ]
 ```
 

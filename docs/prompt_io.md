@@ -251,13 +251,13 @@ worklet's id and whose type is `THEME`):
 
 | Property | From |
 | --- | --- |
-| `title` | `"<ticket title> - <vs name>"` |
+| `summary` | `"<ticket title> - <vs name>"` |
 | `description` | framing paragraph (call 2) + shared body (call 1) |
 | `businessNeeds` | call 5 |
 | `generatedByLLM` | constant `true` |
-| `selectedStages` | call 3, resolved against the catalogue |
-| `l3BusinessCapability` | call 4, resolved against the catalogue |
-| `l2BusinessCapability` | derived in code from the selected L3 |
+| `selectedTags` | call 3, resolved; stored as `{ stageId: "stageName {stageId}" }` |
+| `l3BusinessCapabilityModel` | call 4, resolved; stored as `{ capId: "name {capId}" }` |
+| `l2BusinessCapabilityModel` | derived from the selected L3; stored as `{ capId: "name {capId}" }` |
 
 Full worklet shape and field tables: see [api_integration.md](api_integration.md) and
 [worklet_contract.md](worklet_contract.md).

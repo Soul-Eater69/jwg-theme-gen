@@ -104,13 +104,14 @@ class ERProps:
 
 class ThemeProps:
     VALUE_STREAM_ID = "valueStreamId"  # input only: the business VS id (the SQL catalogue key)
-    TITLE = "title"
+    SUMMARY = "summary"
     DESCRIPTION = "description"
     BUSINESS_NEEDS = "businessNeeds"
     GENERATED_BY_LLM = "generatedByLLM"
-    SELECTED_STAGES = "selectedStages"
-    L3 = "l3BusinessCapability"
-    L2 = "l2BusinessCapability"
+    # These three are id -> "name {id}" maps (key = the catalogue id), not lists.
+    SELECTED_TAGS = "selectedTags"
+    L3 = "l3BusinessCapabilityModel"
+    L2 = "l2BusinessCapabilityModel"
 
 
 def value_stream_id(vs_worklet: Worklet) -> str:
@@ -169,10 +170,15 @@ def to_vs_context(vs_id: str, catalogue: ValueStreamCatalogue) -> VSContext:
     )
 
 
+def _id_label_map(items: Sequence[Any], *, id_of, name_of) -> dict[str, str]:
+    """Build the ``{ id: "<name> {id}" }`` map used for the stage/L3/L2 properties (key = the id)."""
+    return {id_of(i): f"{name_of(i)} {{{id_of(i)}}}" for i in items}
+
+
 def to_theme_worklet(
     vs_worklet: Worklet,
     *,
-    title: str,
+    summary: str,
     description: str,
     business_needs: str,
     selected_stages: Sequence[SelectedStage],
@@ -185,34 +191,32 @@ def to_theme_worklet(
     The theme worklet is **created** (not an enriched stub): its ``parent_worklet_id`` is the VS
     worklet's id, its ``worklet_type`` is ``THEME``, its ``source_id`` carries down from the VS
     worklet, and its ``properties`` are the generated theme content (as
-    ``{propertyName, propertyValue}`` entries).
+    ``{propertyName, propertyValue}`` entries). Stages, L3, and L2 are stored as ``{ id: "name {id}" }``
+    maps (key = the catalogue id), not lists.
 
     Args:
         vs_worklet: The value-stream worklet this theme is generated under (its id becomes the
             theme's parent id).
-        title: The Theme title.
+        summary: The Theme summary (``"<ticket title> - <vs name>"``).
         description: The Theme description.
         business_needs: The Business Needs text.
-        selected_stages: The stages selected for the value stream (full shape: id, name, scope, reason).
+        selected_stages: The stages selected for the value stream.
         l3: The selected L3 capabilities.
         l2: The derived L2 capabilities.
 
     Returns:
         A new THEME worklet parented to ``vs_worklet``.
     """
-    # CamelModel forces by_alias on model_dump, so the property values serialize camelCase.
     properties = {
-        ThemeProps.TITLE: title,
+        ThemeProps.SUMMARY: summary,
         ThemeProps.DESCRIPTION: description,
         ThemeProps.BUSINESS_NEEDS: business_needs,
         ThemeProps.GENERATED_BY_LLM: True,
-        ThemeProps.SELECTED_STAGES: [s.model_dump() for s in selected_stages],
-        # L3 stores levelTwoId (the link) only; the L2 name/description live on the L2 entry, not
-        # duplicated here. (level_two_name/description stay on the model so derive_l2 can build L2.)
-        ThemeProps.L3: [
-            c.model_dump(exclude={"level_two_name", "level_two_description"}) for c in l3
-        ],
-        ThemeProps.L2: [c.model_dump() for c in l2],
+        ThemeProps.SELECTED_TAGS: _id_label_map(
+            selected_stages, id_of=lambda s: s.stage_id, name_of=lambda s: s.stage_name
+        ),
+        ThemeProps.L3: _id_label_map(l3, id_of=lambda c: c.id, name_of=lambda c: c.name),
+        ThemeProps.L2: _id_label_map(l2, id_of=lambda c: c.id, name_of=lambda c: c.name),
     }
     return Worklet(
         worklet_type=WorkletType.THEME,
