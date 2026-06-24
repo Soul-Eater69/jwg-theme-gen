@@ -50,11 +50,6 @@ from jwg_app.domain.services.coverage_analysis import CoverageAnalysisService
 from jwg_app.domain.services.theme_generation_handler import ThemeGenerationHandler
 from jwg_app.domain.services.theme_service import ThemeService
 
-# Worklet property names this service reads/writes directly (the theme worklet_mapper is theme-internal
-# and not imported here): the VS lookup key on input, and the failure marker on a generated theme.
-_VALUE_STREAM_ID_PROPERTY = "valueStreamId"
-_GENERATION_ERROR_PROPERTY = "generationError"
-
 
 class GeneratorService:
     """Partial reference — theme-generation methods only.
@@ -176,7 +171,9 @@ class GeneratorService:
             ``(generated_themes, failed_value_streams)`` - the saved generated THEME worklets and the
             saved failure worklets (each carrying ``generationError``). Both are persisted.
         """
-        # Step 0 - require at least one VS worklet, each carrying a valueStreamId (deduped for audit).
+        # Step 0 - require at least one VS worklet; collect the value-stream ids (deduped) for the
+        # audit trail. A VS worklet missing valueStreamId just becomes a failure worklet downstream
+        # (the handler looks up an empty catalogue), so it is not rejected here.
         if not vs_worklets:
             raise CustomException(
                 status_code=HTTPStatus.BAD_REQUEST,
@@ -184,13 +181,8 @@ class GeneratorService:
             )
         value_stream_ids: List[str] = []
         for vs_worklet in vs_worklets:
-            vs_id = vs_worklet.get_property_value(_VALUE_STREAM_ID_PROPERTY)
-            if not vs_id:
-                raise CustomException(
-                    status_code=HTTPStatus.BAD_REQUEST,
-                    detail="Value Stream worklet must have a valueStreamId property",
-                )
-            if vs_id not in value_stream_ids:
+            vs_id = vs_worklet.get_property_value("valueStreamId")
+            if vs_id and vs_id not in value_stream_ids:
                 value_stream_ids.append(vs_id)
 
         # Step 1 - fetch and validate the Engagement Request.
@@ -233,7 +225,9 @@ class GeneratorService:
         for theme_worklet in theme_worklets:
             theme_worklet.current_user = user_info
             saved = await self.upsert_worklet(theme_worklet, user_info)
-            if saved.get_property_value(_GENERATION_ERROR_PROPERTY):
+            # a failure worklet carries a generationError property (theme worklet_mapper is
+            # theme-internal, so the property name is read directly here).
+            if saved.get_property_value("generationError"):
                 failed_value_streams.append(saved)
             else:
                 generated_themes.append(saved)
