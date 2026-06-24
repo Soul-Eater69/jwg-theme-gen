@@ -18,7 +18,6 @@ What changed vs the previous _generate_theme_package:
      generationError property), and return (generated_themes, failed_value_streams). The GENERATE
      case maps that to 200 (all ok), 207 (some failed), or 500 (all failed). The handler builds each
      theme's businessValueStream from the VS worklet's title + valueStreamId.
-  4. Add all vs_ids to the ER selected_VS_ids audit trail.
 
 DI wiring (interface/dependencies/generator.py), matching the prod chain
 (get_db_session -> repository -> service -> Depends in the endpoint):
@@ -171,20 +170,6 @@ class GeneratorService:
             ``(generated_themes, failed_value_streams)`` - the saved generated THEME worklets and the
             saved failure worklets (each carrying ``generationError``). Both are persisted.
         """
-        # Step 0 - require at least one VS worklet; collect the value-stream ids (deduped) for the
-        # audit trail. A VS worklet missing valueStreamId just becomes a failure worklet downstream
-        # (the handler looks up an empty catalogue), so it is not rejected here.
-        if not vs_worklets:
-            raise CustomException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="GENERATE action requires at least one Value Stream worklet in source",
-            )
-        value_stream_ids: List[str] = []
-        for vs_worklet in vs_worklets:
-            vs_id = vs_worklet.get_property_value("valueStreamId")
-            if vs_id and vs_id not in value_stream_ids:
-                value_stream_ids.append(vs_id)
-
         # Step 1 - fetch and validate the Engagement Request.
         er_worklet = await self.get_worklet_by_id(engagement_request_id)
         er_validation = await self.validate_worklet(
@@ -195,22 +180,15 @@ class GeneratorService:
                 status_code=er_validation["status_code"], detail=er_validation["detail"]
             )
 
-        # Step 2 - validate EACH input VS worklet (correct type, parented to this ER).
-        for vs_worklet in vs_worklets:
-            vs_validation = await self.validate_worklet(
-                vs_worklet,
-                WorkletType.VALUE_STREAM,
-                source_id=vs_worklet.source_id,
-                parent_worklet_id=er_worklet.id,
+        # Step 2 - require at least one VS worklet.
+        if not vs_worklets:
+            raise CustomException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail="At least one VS worklet is required to generate themes",
             )
-            if vs_validation:
-                raise CustomException(
-                    status_code=vs_validation["status_code"], detail=vs_validation["detail"]
-                )
 
-        # Step 3 - generate. The catalogue reader (ThemeService) is injected via DI; the handler reads
-        # each VS's attributes/stages/capabilities from Azure SQL (keyed by each VS worklet's
-        # valueStreamId) and generates one THEME worklet per VS, parented to that VS worklet.
+        # Step 3 - generate. One run() across all VS: the handler batches the shared LLM calls and
+        # returns one THEME worklet per VS - a generated theme, or a failure worklet (generationError).
         handler = ThemeGenerationHandler(
             azure_sql_client=self.theme_service,
             platform_client=self.platform_client,
@@ -218,37 +196,17 @@ class GeneratorService:
         )
         theme_worklets = await handler.run(er_worklet=er_worklet, vs_worklets=vs_worklets)
 
-        # Step 4 - persist each THEME worklet and split successes from failures. A failure worklet
-        # carries a generationError property (the generated content is replaced by the error).
+        # Step 4 - persist each THEME worklet and split successes from failures (a failure worklet
+        # carries a generationError property).
         generated_themes: List[Worklet] = []
         failed_value_streams: List[Worklet] = []
         for theme_worklet in theme_worklets:
             theme_worklet.current_user = user_info
             saved = await self.upsert_worklet(theme_worklet, user_info)
-            # a failure worklet carries a generationError property (theme worklet_mapper is
-            # theme-internal, so the property name is read directly here).
             if saved.get_property_value("generationError"):
                 failed_value_streams.append(saved)
             else:
                 generated_themes.append(saved)
-
-        # Step 5 - update the ER worklet's selected_VS_ids audit trail with ALL value streams.
-        er_properties = {
-            p.get("propertyName"): p.get("propertyValue")
-            for p in (er_worklet.model_dump().get("properties") or [])
-        }
-        similar_entities = er_properties.get("similarEntitiesId") or {}
-        selected_vs_ids = similar_entities.get("selected_VS_ids", [])
-        changed = False
-        for value_stream_id in value_stream_ids:
-            if value_stream_id not in selected_vs_ids:
-                selected_vs_ids.append(value_stream_id)
-                changed = True
-        if changed:
-            similar_entities["selected_VS_ids"] = selected_vs_ids
-            er_worklet.upsert_property(name="similarEntitiesId", value=similar_entities)
-            er_worklet.current_user = user_info
-            await self.upsert_worklet(er_worklet, user_info)
 
         self.logger.info(
             "Theme generation for ER %s: %d generated, %d failed",
