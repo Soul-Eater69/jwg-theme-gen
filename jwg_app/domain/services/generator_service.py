@@ -47,9 +47,13 @@ from jwg_app.domain.exceptions.custom_exception import CustomException
 from jwg_app.domain.interfaces.platform_client import PlatformClient
 from jwg_app.domain.models.base import ValueStreamAction
 from jwg_app.domain.services.coverage_analysis import CoverageAnalysisService
-from jwg_app.domain.services.theme import worklet_mapper as theme_mapper
 from jwg_app.domain.services.theme_generation_handler import ThemeGenerationHandler
 from jwg_app.domain.services.theme_service import ThemeService
+
+# Worklet property names this service reads/writes directly (the theme worklet_mapper is theme-internal
+# and not imported here): the VS lookup key on input, and the failure marker on a generated theme.
+_VALUE_STREAM_ID_PROPERTY = "valueStreamId"
+_GENERATION_ERROR_PROPERTY = "generationError"
 
 
 class GeneratorService:
@@ -180,7 +184,7 @@ class GeneratorService:
             )
         value_stream_ids: List[str] = []
         for vs_worklet in vs_worklets:
-            vs_id = theme_mapper.value_stream_id(vs_worklet)
+            vs_id = vs_worklet.get_property_value(_VALUE_STREAM_ID_PROPERTY)
             if not vs_id:
                 raise CustomException(
                     status_code=HTTPStatus.BAD_REQUEST,
@@ -229,7 +233,7 @@ class GeneratorService:
         for theme_worklet in theme_worklets:
             theme_worklet.current_user = user_info
             saved = await self.upsert_worklet(theme_worklet, user_info)
-            if theme_mapper.get_property(saved, theme_mapper.ThemeProps.GENERATION_ERROR):
+            if saved.get_property_value(_GENERATION_ERROR_PROPERTY):
                 failed_value_streams.append(saved)
             else:
                 generated_themes.append(saved)
