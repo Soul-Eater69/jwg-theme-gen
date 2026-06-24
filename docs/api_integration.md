@@ -146,12 +146,12 @@ property. The caller tells the two apart by the presence of `generationError`.
 | `parentWorkletId` | the value-stream worklet's `id` |
 | `sourceId` | carried down from the value-stream worklet |
 | `businessValueStream` | built as `"<title> {<valueStreamId>}"` (so the failed row is still labelled) |
-| `generationError` | the error detail text (a string) |
+| `generationError` | a fixed message, `"Theme generation error"` (the real cause is logged, not stored) |
 
 ```json
 [
   { "propertyName": "businessValueStream", "propertyValue": "Acquire Asset {VSR00074583}" },
-  { "propertyName": "generationError",     "propertyValue": "LLM service unavailable: needs gateway down" }
+  { "propertyName": "generationError",     "propertyValue": "Theme generation error" }
 ]
 ```
 

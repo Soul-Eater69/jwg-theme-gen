@@ -136,12 +136,13 @@ Azure SQL unavailable (`503`). Every error is logged (`logger.error`) before it 
 ### Failure worklet shape
 
 Same THEME envelope as a generated theme (parented to its VS worklet, `businessValueStream` built),
-with the generated content replaced by a single `generationError` (the error detail string):
+with the generated content replaced by a single `generationError` (a fixed `"Theme generation error"`
+message; the real cause is logged, not stored):
 
 ```json
 [
   { "propertyName": "businessValueStream", "propertyValue": "Acquire Asset {VSR00074583}" },
-  { "propertyName": "generationError",     "propertyValue": "LLM service unavailable: needs gateway down" }
+  { "propertyName": "generationError",     "propertyValue": "Theme generation error" }
 ]
 ```
 

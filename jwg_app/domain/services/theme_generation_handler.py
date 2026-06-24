@@ -49,6 +49,9 @@ from jwg_app.infrastructure.external.strict_schema import strict_response_format
 
 logger = logging.getLogger(__name__)
 
+# Stored on a failure worklet's generationError property (a fixed message; the real cause is logged).
+GENERATION_ERROR_MESSAGE = "Theme generation error"
+
 
 def _error_detail(exc: BaseException) -> str:
     """The error text stored in a failure worklet's ``generationError`` (CustomException detail or str)."""
@@ -156,9 +159,12 @@ class ThemeGenerationHandler:
             except CustomException as exc:
                 shared_failure = exc
         if shared_failure is not None:
-            detail = _error_detail(shared_failure)
-            logger.error("theme generation failed for all value streams: %s", detail)
-            return [mapper.to_failed_theme_worklet(w, detail) for w in vs_worklets]
+            logger.error(
+                "theme generation failed for all value streams: %s", _error_detail(shared_failure)
+            )
+            return [
+                mapper.to_failed_theme_worklet(w, GENERATION_ERROR_MESSAGE) for w in vs_worklets
+            ]
 
         # --- Per-VS phase: each value stream's own flow (business needs + assembly). A failure here
         # (business needs unavailable, or no stages resolved) only affects that value stream: its
@@ -173,9 +179,10 @@ class ThemeGenerationHandler:
         themes: list[Worklet] = []
         for vs_wlet, vs_id, result in zip(vs_worklets, vs_ids, results):
             if isinstance(result, BaseException):
-                detail = _error_detail(result)
-                logger.error("theme generation failed for value stream %s: %s", vs_id, detail)
-                themes.append(mapper.to_failed_theme_worklet(vs_wlet, detail))
+                logger.error(
+                    "theme generation failed for value stream %s: %s", vs_id, _error_detail(result)
+                )
+                themes.append(mapper.to_failed_theme_worklet(vs_wlet, GENERATION_ERROR_MESSAGE))
             else:
                 themes.append(result)
 
