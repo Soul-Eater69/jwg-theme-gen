@@ -228,10 +228,11 @@ class GeneratorService:
         """
         Analyse an Engagement Request: coverage + creativity of its generated themes.
 
-        Worklet in, the same worklet out. ``CoverageAnalysisService.analyze_worklet`` reads the source
+        Worklet in, the same worklet out. The coverage service is pure scoring: it reads the source
         context off the ER's ``rawText`` property, scores each theme's ``description`` + ``Business
-        Needs`` against it, and attaches the JSON-ready ``analysis`` property on the ER worklet in
-        place. Replaces the previous STUB (mock 0.0 scores).
+        Needs`` against it, and **returns** the JSON-ready metrics. This method owns the worklet I/O:
+        it upserts the metrics onto the ER's ``analysis`` property and persists it. Replaces the
+        previous STUB (mock 0.0 scores).
         """
         # Step 1-2 - fetch + validate the ER (unchanged from the stub).
         er_worklet = await self.get_worklet_by_id(source_worklet.id)
@@ -243,14 +244,14 @@ class GeneratorService:
                 status_code=er_validation["status_code"], detail=er_validation["detail"]
             )
 
-        # Step 3 - the generated THEME worklets to score (the context comes off the ER inside the
-        # service).
+        # Step 3 - the generated THEME worklets to score (only valid themes are passed in).
         themes = await self._get_generated_themes_for_analysis(er_worklet)  # returns THEME worklets
 
-        # Step 4 - score and attach the ``analysis`` property to the ER worklet in place.
-        er_worklet = self.coverage_service.analyze_worklet(er_worklet=er_worklet, themes=themes)
+        # Step 4 - score the themes (the coverage service returns the metrics; it does not mutate).
+        analysis = self.coverage_service.analyze(er_worklet=er_worklet, themes=themes)
 
-        # Step 5 - persist the enriched ER worklet.
+        # Step 5 - upsert the analysis onto the ER worklet and persist it (worklet I/O owned here).
+        er_worklet.upsert_property(name=self.coverage_service.ANALYSIS_PROPERTY, value=analysis)
         er_worklet.current_user = user
         er_worklet = await self.worklet_api_er.update_worklet(er_worklet.id, er_worklet, user)
         return er_worklet

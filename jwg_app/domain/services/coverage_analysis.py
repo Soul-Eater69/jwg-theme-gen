@@ -6,9 +6,10 @@ evaluator expects a raw context property named ``acceptanceCriteria`` and genera
 ``title`` / ``description`` properties. For Themes, we send the Theme description and Business
 Needs texts through those two evaluator fields.
 
-``analyze_worklet`` is the worklet-in / worklet-out entry point: it reads the source context off the
-ER worklet's ``rawText`` property, scores the themes, and attaches the JSON-ready ``analysis``
-property on the ER worklet in place.
+``analyze`` is the entry point: it reads the source context off the ER worklet's ``rawText`` property,
+scores the themes, and **returns** the JSON-ready metrics list. It is pure - it does not mutate or
+persist the worklet. The caller (the generator service) upserts the result onto the ``analysis``
+property and persists the ER worklet.
 """
 
 from __future__ import annotations
@@ -62,7 +63,7 @@ class CoverageAnalysisService:
     def __init__(self, evaluator: CoverageEvaluator | None = None) -> None:
         self._evaluator = evaluator
 
-    def analyze_worklet(
+    def analyze(
         self,
         *,
         er_worklet: Worklet,
@@ -71,63 +72,28 @@ class CoverageAnalysisService:
         remove_stopwords: bool = True,
         coverage_color: Any = "green",
         creativity_color: Any = "orange",
-    ) -> Worklet:
-        """
-        Score an Engagement Request's generated Themes and attach the result to the ER worklet.
-
-        Worklet in, the same worklet out: reads the source context off ``er_worklet`` (the ``rawText``
-        property), scores the Theme descriptions and Business Needs against it, and upserts the
-        JSON-safe ``analysis`` property on the ER worklet in place (overwriting it on a re-run). The
-        caller persists the returned worklet.
-
-        Args:
-            er_worklet: The Engagement Request worklet (the ANALYSE source).
-            themes: The generated Theme worklets to score.
-            n: N-gram size used by the evaluator.
-            remove_stopwords: Whether evaluator stopword filtering is enabled.
-            coverage_color: Highlight color for covered source text.
-            creativity_color: Highlight color for generated text not grounded in the source.
-
-        Returns:
-            The same ``er_worklet`` with the ``analysis`` property attached.
-        """
-        raw_text = _get_property(er_worklet, self.ER_RAW_TEXT_PROPERTY, "") or ""
-        result = self.analyze(
-            raw_text=raw_text,
-            themes=themes,
-            n=n,
-            remove_stopwords=remove_stopwords,
-            coverage_color=coverage_color,
-            creativity_color=creativity_color,
-        )
-        er_worklet.upsert_property(name=self.ANALYSIS_PROPERTY, value=result)
-        return er_worklet
-
-    def analyze(
-        self,
-        *,
-        raw_text: str,
-        themes: list[Worklet],
-        n: int = 1,
-        remove_stopwords: bool = True,
-        coverage_color: Any = "green",
-        creativity_color: Any = "orange",
     ) -> list[dict[str, Any]]:
         """
-        Score generated Themes against the raw engagement-request text.
+        Score an Engagement Request's generated Themes and return the analysis metrics.
+
+        Pure scoring, no side effects: reads the source context off ``er_worklet`` (the ``rawText``
+        property), scores each Theme's description and Business Needs against it, and returns the
+        JSON-safe metrics list. The caller (the generator service) upserts this onto the ER worklet's
+        ``analysis`` property and persists it - coverage never mutates or persists the worklet.
 
         Args:
-            raw_text: The original raw ticket text.
-            themes: Generated Theme worklets.
+            er_worklet: The Engagement Request worklet (the ANALYSE source); only ``rawText`` is read.
+            themes: The generated Theme worklets to score (assumed all valid - no failure worklets).
             n: N-gram size used by the evaluator.
             remove_stopwords: Whether evaluator stopword filtering is enabled.
             coverage_color: Highlight color for covered source text.
             creativity_color: Highlight color for generated text not grounded in the source.
 
         Returns:
-            The coverage/creativity metrics as JSON-serializable dicts (the evaluator returns Metric
-            objects; they are converted here so the result can be returned/serialized directly).
+            The coverage/creativity metrics as JSON-serializable dicts, one per metric (the evaluator
+            returns Metric objects; they are converted here so the result serializes directly).
         """
+        raw_text = _get_property(er_worklet, self.ER_RAW_TEXT_PROPERTY, "") or ""
         dataset = self.build_dataset(
             raw_text=raw_text,
             themes=themes,

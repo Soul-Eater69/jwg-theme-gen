@@ -86,7 +86,7 @@ def test_analyze_delegates_to_evaluator_with_dataset():
     service = CoverageAnalysisService(evaluator=evaluator)
 
     result = service.analyze(
-        raw_text="raw",
+        er_worklet=_Worklet([_Prop("rawText", "raw")]),
         themes=[_theme("desc", "needs")],
         n=2,
         remove_stopwords=False,
@@ -129,22 +129,21 @@ def test_analysis_property_wraps_result_for_api_contract():
     }
 
 
-def test_analyze_worklet_attaches_analysis_property_in_place():
+def test_analyze_returns_metrics_without_mutating_the_worklet():
     evaluator = _FakeEvaluator()
     service = CoverageAnalysisService(evaluator=evaluator)
     er = _Worklet([_Prop("rawText", "raw ticket text")])
 
-    result = service.analyze_worklet(er_worklet=er, themes=[_theme("desc", "needs")])
+    result = service.analyze(er_worklet=er, themes=[_theme("desc", "needs")])
 
-    # same worklet back, with the analysis property attached.
-    assert result is er
-    assert er.properties[-1].property_name == "analysis"
-    assert er.properties[-1].property_value == [{"coverage": 0.75}]
+    # coverage just returns the metrics; the worklet is untouched (the service does the upsert).
+    assert result == [{"coverage": 0.75}]
+    assert [p.property_name for p in er.properties] == ["rawText"]
     # the context scored against was the rawText property.
     assert evaluator.dataset["context"][0]["propertyValue"] == "raw ticket text"
 
 
-def test_analyze_worklet_scores_against_raw_text_only():
+def test_analyze_scores_against_raw_text_only():
     evaluator = _FakeEvaluator()
     service = CoverageAnalysisService(evaluator=evaluator)
     # summary/description are ignored; only rawText is the context.
@@ -156,20 +155,9 @@ def test_analyze_worklet_scores_against_raw_text_only():
         ]
     )
 
-    service.analyze_worklet(er_worklet=er, themes=[_theme("desc", "needs")])
+    service.analyze(er_worklet=er, themes=[_theme("desc", "needs")])
 
     assert evaluator.dataset["context"][0]["propertyValue"] == "the raw ticket"
-
-
-def test_analyze_worklet_overwrites_analysis_on_rerun():
-    service = CoverageAnalysisService(evaluator=_FakeEvaluator())
-    er = _Worklet([_Prop("rawText", "raw"), _Prop("analysis", "stale")])
-
-    service.analyze_worklet(er_worklet=er, themes=[_theme("d", "n")])
-
-    analysis = [p for p in er.properties if p.property_name == "analysis"]
-    assert len(analysis) == 1
-    assert analysis[0].property_value == [{"coverage": 0.75}]
 
 
 class _FakeMetric:

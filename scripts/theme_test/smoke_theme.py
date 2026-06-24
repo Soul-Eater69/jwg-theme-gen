@@ -271,7 +271,7 @@ def _shorten_strings(obj: Any, limit: int = 160) -> Any:
 
 
 def _run_coverage(er_worklet: Worklet, raw_text: str, themes: List[Worklet]) -> None:
-    """Run coverage analysis on the generated theme worklets, worklet in -> worklet out."""
+    """Run coverage analysis on the generated theme worklets (the same flow the service does)."""
     from jwg_app.domain.services.coverage_analysis import CoverageAnalysisService
 
     _register_bundled_nltk_data()
@@ -281,8 +281,8 @@ def _run_coverage(er_worklet: Worklet, raw_text: str, themes: List[Worklet]) -> 
     print(f"# coverage analysis: {len(dataset['generated_text'])} theme(s) scored vs raw text "
           f"({len(raw_text)} chars)")
     try:
-        # analyze_worklet attaches the ``analysis`` property to the ER worklet in place.
-        analyzed = service.analyze_worklet(er_worklet=er_worklet, themes=themes)
+        # coverage just returns the metrics; the service upserts them onto the ER (mimicked here).
+        analysis_value = service.analyze(er_worklet=er_worklet, themes=themes)
     except RuntimeError as exc:
         # The n-gram evaluator (text_evaluation) is a prod dependency; print the dataset instead.
         print(f"# evaluator unavailable: {exc}")
@@ -290,9 +290,8 @@ def _run_coverage(er_worklet: Worklet, raw_text: str, themes: List[Worklet]) -> 
         print(json.dumps(_shorten_strings(dataset), indent=2, default=str))
         return
 
-    # The serialized worklet "analysis" property - exactly what the API would return on the ER.
-    # Read via the mapper so both dict- and object-shaped properties on the ER are handled.
-    analysis_value = mapper.get_property(analyzed, service.ANALYSIS_PROPERTY, []) or []
+    er_worklet.upsert_property(name=service.ANALYSIS_PROPERTY, value=analysis_value)
+    # The serialized "analysis" property - exactly what the API would return on the ER.
     analysis = {"propertyName": service.ANALYSIS_PROPERTY, "propertyValue": analysis_value}
     for metric in analysis["propertyValue"]:
         name = metric.get("metric_name")

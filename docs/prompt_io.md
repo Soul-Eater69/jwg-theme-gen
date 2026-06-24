@@ -271,7 +271,8 @@ Full worklet shape and field tables: see [api_integration.md](api_integration.md
 Coverage is a **separate action** that runs **after** generation, and it is **not a prompt**: it is
 deterministic n-gram scoring (`text_evaluation.ngram_evaluation.NgramEvaluator`). It is included here
 because it is the other half of the theme-generation contract. Entry point:
-`CoverageAnalysisService.analyze_worklet(er_worklet, themes)`.
+`CoverageAnalysisService.analyze(er_worklet, themes)` — it **returns** the metrics list; the
+generator service upserts them onto the ER's `analysis` property and persists it.
 
 **Input** — read off the worklets (no prompt, no model):
 

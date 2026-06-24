@@ -193,40 +193,47 @@ Nothing to pass - it is inside the handler:
 
 ## 5. Coverage analysis
 
-Scores how well the generated themes cover the ER's raw text. Run **after** generation; the result is
-upserted as an `analysis` property on the **ER** worklet.
+Scores how well the generated themes cover the ER's raw text. Run **after** generation. The coverage
+service is **pure scoring** - it returns the `analysis` metrics; the **caller** (the generator
+service) upserts them onto the ER worklet's `analysis` property and persists it. Coverage never
+mutates or persists the worklet.
 
 ### Entry point
 
 ```python
 CoverageAnalysisService(evaluator: CoverageEvaluator | None = None)   # default loads NgramEvaluator
 
-# Worklet in -> the same worklet out (preferred): reads the context off the ER, scores the themes,
-# attaches the JSON-ready ``analysis`` property on the ER worklet in place, and returns it.
-def analyze_worklet(
-    *, er_worklet: Worklet,                # the ANALYSE source (Engagement Request) worklet
-    themes: list[Worklet],                 # the generated THEME worklets
+# Reads the context off the ER (rawText), scores the themes, and RETURNS the metrics list.
+# It does not touch the worklet - the caller upserts the result onto the ER's "analysis" property.
+def analyze(
+    *, er_worklet: Worklet,                # the ANALYSE source (Engagement Request) worklet; only rawText is read
+    themes: list[Worklet],                 # the generated THEME worklets (valid themes only)
     n: int = 1,
     remove_stopwords: bool = True,
     coverage_color: Any = "green",
     creativity_color: Any = "orange",
-) -> Worklet                              # the same er_worklet, with the "analysis" property attached
+) -> list[dict]                           # one serialized dict per metric (Coverage, Creativity)
 
-# Lower-level (text in -> scores out), if you already hold the raw text:
-def analyze(*, raw_text: str, themes: list[Worklet], ...) -> list[dict]   # one dict per metric, serialized
-def analysis_property(result: list) -> dict   # -> the worklet "analysis" property (JSON-safe)
+def analysis_property(result: list) -> dict   # -> the worklet "analysis" property (JSON-safe), if you want it pre-wrapped
+```
+
+The caller does the worklet I/O:
+
+```python
+analysis = service.analyze(er_worklet=er_worklet, themes=themes)   # metrics list
+er_worklet.upsert_property(name="analysis", value=analysis)        # caller owns the upsert + persist
 ```
 
 ### Context source (what the themes are scored against)
 
-`analyze_worklet` scores the themes against the ER worklet's **`rawText`** property only — the raw
-ticket text generation was grounded on. There is no fallback; the ANALYSE payload must carry
-`rawText`. On the generated side, only the theme **`description`** and **`businessNeeds`** texts are
-scored — nothing else.
+`analyze` scores the themes against the ER worklet's **`rawText`** property only — the raw ticket text
+generation was grounded on. There is no fallback; the ANALYSE payload must carry `rawText`. On the
+generated side, only the theme **`description`** and **`businessNeeds`** texts are scored — nothing
+else.
 
 ### Output — the `analysis` property
 
-`analysis_property(analyze(...))` returns the property to upsert on the ER worklet:
+`analyze(...)` returns the metrics list; the caller upserts it under the `analysis` property name:
 
 ```json
 {
@@ -283,8 +290,9 @@ handler = ThemeGenerationHandler(catalogue, platform_client, USER_CONFIG_PATH)
 themes = await handler.run(er_worklet, vs_worklets)            # one THEME worklet per VS (success or generationError)
 # persist `themes`; a worklet with a `generationError` property is a failed value stream
 
-# coverage (after generation, on the ER) - worklet in, the same worklet out
+# coverage (after generation, on the ER) - coverage returns the metrics; the caller upserts + persists
 service = CoverageAnalysisService()                              # default NgramEvaluator
-er_worklet = service.analyze_worklet(er_worklet=er_worklet, themes=themes)  # "analysis" attached in place
+analysis = service.analyze(er_worklet=er_worklet, themes=themes)  # metrics list (valid themes only)
+er_worklet.upsert_property(name="analysis", value=analysis)       # caller owns the upsert
 # update + commit the ER worklet
 ```
