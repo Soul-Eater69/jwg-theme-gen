@@ -82,11 +82,14 @@ class _InputWorklet:
         self.properties = properties
 
 
-def test_to_failed_theme_worklet_carries_bvs_and_error_only():
+def test_to_failed_theme_worklet_builds_bvs_and_carries_error_only():
     vs = _InputWorklet(
         id="vswlet-1",
         source_id="t1",
-        properties=[{"propertyName": "businessValueStream", "propertyValue": "Acquire Asset {VSR1}"}],
+        properties=[
+            {"propertyName": "title", "propertyValue": "Acquire Asset"},
+            {"propertyName": "valueStreamId", "propertyValue": "VSR1"},
+        ],
     )
     failed = mapper.to_failed_theme_worklet(vs, "boom")
 
@@ -94,7 +97,7 @@ def test_to_failed_theme_worklet_carries_bvs_and_error_only():
     assert str(failed.worklet_type) in ("WorkletType.THEME", "THEME")
     assert failed.parent_worklet_id == "vswlet-1"
     assert failed.source_id == "t1"
-    # carries businessValueStream + the error detail, and nothing generated
+    # businessValueStream built from title + valueStreamId, plus the error detail, nothing generated
     assert mapper.get_property(failed, mapper.ThemeProps.GENERATION_ERROR) == "boom"
     assert mapper.get_property(failed, mapper.ThemeProps.BUSINESS_VALUE_STREAM) == "Acquire Asset {VSR1}"
     assert mapper.get_property(failed, mapper.ThemeProps.SUMMARY) is None

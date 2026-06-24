@@ -104,7 +104,8 @@ class ERProps:
 
 class ThemeProps:
     VALUE_STREAM_ID = "valueStreamId"  # input only: the business VS id (the SQL catalogue key)
-    BUSINESS_VALUE_STREAM = "businessValueStream"  # carried over from the VS worklet onto the theme
+    VALUE_STREAM_TITLE = "title"  # input only: the VS worklet's display title (e.g. "Acquire Asset")
+    BUSINESS_VALUE_STREAM = "businessValueStream"  # built as "<title> {<valueStreamId>}" onto the theme
     SUMMARY = "summary"
     DESCRIPTION = "description"
     BUSINESS_NEEDS = "businessNeeds"
@@ -131,6 +132,27 @@ def value_stream_id(vs_worklet: Worklet) -> str:
         The Value Stream id.
     """
     return get_property(vs_worklet, ThemeProps.VALUE_STREAM_ID, "")
+
+
+def business_value_stream(vs_worklet: Worklet) -> str:
+    """
+    Build the theme's ``businessValueStream`` label from the VS worklet's ``title`` + ``valueStreamId``.
+
+    Format: ``"<title> {<valueStreamId>}"`` (e.g. ``"Acquire Asset {VSR00074583}"``) - the label the
+    platform shows for the value stream. The VS worklet carries ``title`` and ``valueStreamId``, not a
+    prebuilt ``businessValueStream`` property, so it is constructed here once and put on every theme.
+
+    Args:
+        vs_worklet: The value-stream worklet.
+
+    Returns:
+        The ``"<title> {<id>}"`` label, or ``""`` when the worklet carries neither field.
+    """
+    title = get_property(vs_worklet, ThemeProps.VALUE_STREAM_TITLE, "") or ""
+    vs_id = get_property(vs_worklet, ThemeProps.VALUE_STREAM_ID, "") or ""
+    if not title and not vs_id:
+        return ""
+    return f"{title} {{{vs_id}}}"
 
 
 def to_er_context(er_worklet: Worklet) -> ERContext:
@@ -198,8 +220,8 @@ def to_failed_theme_worklet(vs_worklet: Worklet, error: str) -> Worklet:
     """
     Build a THEME worklet that records a generation failure for one value stream.
 
-    Same envelope as a generated theme (parented to the VS worklet, ``businessValueStream`` carried
-    over), but the generated content is replaced by a single ``generationError`` property holding the
+    Same envelope as a generated theme (parented to the VS worklet, ``businessValueStream`` built from
+    the VS worklet), but the generated content is replaced by a single ``generationError`` holding the
     error detail. The caller returns these alongside the successful theme worklets, so a failed value
     stream is surfaced in place instead of failing the whole request.
 
@@ -213,9 +235,7 @@ def to_failed_theme_worklet(vs_worklet: Worklet, error: str) -> Worklet:
     return _theme_worklet(
         vs_worklet,
         {
-            ThemeProps.BUSINESS_VALUE_STREAM: get_property(
-                vs_worklet, ThemeProps.BUSINESS_VALUE_STREAM, ""
-            ),
+            ThemeProps.BUSINESS_VALUE_STREAM: business_value_stream(vs_worklet),
             ThemeProps.GENERATION_ERROR: error,
         },
     )
@@ -256,10 +276,8 @@ def to_theme_worklet(
     return _theme_worklet(
         vs_worklet,
         {
-            # carried straight over from the input VS worklet (e.g. "Acquire Asset {VSR00074583}")
-            ThemeProps.BUSINESS_VALUE_STREAM: get_property(
-                vs_worklet, ThemeProps.BUSINESS_VALUE_STREAM, ""
-            ),
+            # built from the VS worklet's title + valueStreamId (e.g. "Acquire Asset {VSR00074583}")
+            ThemeProps.BUSINESS_VALUE_STREAM: business_value_stream(vs_worklet),
             ThemeProps.SUMMARY: summary,
             ThemeProps.DESCRIPTION: description,
             ThemeProps.BUSINESS_NEEDS: business_needs,

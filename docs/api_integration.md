@@ -72,17 +72,17 @@ That's all generation reads from the ER. Summary-derived fields are **not** used
 ### 2.2 VALUE_STREAM worklets — input
 
 `run` takes the **list of approved VALUE_STREAM worklets** (one per value stream) and generates a
-theme for every one in a single call. From **each** VS worklet, two things are read:
+theme for every one in a single call. From **each** VS worklet, three things are read:
 
 | Read (per VS worklet) | Worklet field |
 | --- | --- |
 | value-stream id (e.g. `VS10000372`) | `valueStreamId` **property** (the catalogue lookup key) |
+| display title (e.g. `Acquire Asset`) | `title` **property** (used to build `businessValueStream`) |
 | the VS worklet's own id | `id` (becomes the generated theme's `parentWorkletId`) |
-| `businessValueStream` | property — **carried over** onto the theme worklet as-is |
 
-**The `valueStreamId` property, the worklet `id`, and `businessValueStream`.** Name, description, value
-proposition, trigger, stages, and capabilities all come from SQL (the catalogue), keyed by the
-`valueStreamId`. Nothing is written back onto the VS worklet.
+The theme's `businessValueStream` is **built** as `"<title> {<valueStreamId>}"` (e.g. `"Acquire Asset
+{VSR00074583}"`). Name, description, value proposition, trigger, stages, and capabilities all come
+from SQL (the catalogue), keyed by the `valueStreamId`. Nothing is written back onto the VS worklet.
 
 ### 2.3 Output — a newly generated THEME worklet per value stream
 
@@ -94,13 +94,13 @@ generated worklet has:
 | `workletType` | `THEME` |
 | `parentWorkletId` | the value-stream worklet's `id` |
 | `sourceId` | carried down from the value-stream worklet |
-| `properties` | the eight properties below (`businessValueStream` is carried from the VS worklet; the rest are generated) |
+| `properties` | the eight properties below (`businessValueStream` is built from the VS worklet's title + valueStreamId; the rest are generated) |
 
 Written properties:
 
 | Property written | Value |
 | --- | --- |
-| `businessValueStream` | carried over from the VS worklet (e.g. `"Acquire Asset {VSR00074583}"`) |
+| `businessValueStream` | built as `"<title> {<valueStreamId>}"` (e.g. `"Acquire Asset {VSR00074583}"`) |
 | `summary` | `"<ticket title> - <value stream name>"` |
 | `description` | the value stream's framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs document (text; structure is inside the text) |
@@ -145,7 +145,7 @@ property. The caller tells the two apart by the presence of `generationError`.
 | `workletType` | `THEME` |
 | `parentWorkletId` | the value-stream worklet's `id` |
 | `sourceId` | carried down from the value-stream worklet |
-| `businessValueStream` | carried over from the VS worklet (so the failed row is still labelled) |
+| `businessValueStream` | built as `"<title> {<valueStreamId>}"` (so the failed row is still labelled) |
 | `generationError` | the error detail text (a string) |
 
 ```json

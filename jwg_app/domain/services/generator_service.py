@@ -11,8 +11,13 @@ What changed vs the previous _generate_theme_package:
   1. Inject ThemeService as azure_sql_client (the handler reads VS attributes/stages/capabilities
      from Azure SQL; the constructor now requires it). ThemeService is injected into GeneratorService
      via DI - see get_generator_service note below - matching the get_value_stream_service pattern.
-  2. Multi-VS: take the approved VS worklets, run(er, vs_worklets) -> generated THEME worklets.
-  3. Persist each enriched worklet (to_theme_worklet edits the VS worklet in place).
+  2. Multi-VS, ONE call: run(er, vs_worklets) is called once with all approved VS so it can batch
+     the shared LLM calls; it returns one THEME worklet per VS (a generated theme or a failure
+     worklet carrying generationError). It does not raise on LLM failure.
+  3. Partial success: persist every returned THEME worklet, split into generated vs failed (by the
+     generationError property), and return (generated_themes, failed_value_streams). The GENERATE
+     case maps that to 200 (all ok), 207 (some failed), or 500 (all failed). The handler builds each
+     theme's businessValueStream from the VS worklet's title + valueStreamId.
   4. Add all vs_ids to the ER selected_VS_ids audit trail.
 
 DI wiring (interface/dependencies/generator.py), matching the prod chain
@@ -109,13 +114,31 @@ class GeneratorService:
 
             case ValueStreamAction.GENERATE:
                 # Theme generation (TEGApiSpec §6 - Screen 3): the approved VALUE_STREAM worklets.
-                result = await self._generate_theme_package(
+                # The handler returns one THEME worklet per VS - a generated theme or a failure
+                # worklet (generationError) - so generation is partial-success, not all-or-nothing.
+                generated_themes, failed_value_streams = await self._generate_theme_package(
                     engagement_request_id=engagement_request_id,
                     vs_worklets=worklets,
                     user_info=user,
                 )
                 await self.worklet_api_vs.commit()
-                return result, "Theme package generated successfully"
+                if failed_value_streams:
+                    if not generated_themes:
+                        # every value stream failed -> total failure.
+                        raise CustomException(
+                            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                            detail="Theme generation failed for all value streams",
+                        )
+                    # some succeeded, some failed -> partial success; return the generated themes.
+                    raise CustomException(
+                        status_code=HTTPStatus.MULTI_STATUS,
+                        detail=(
+                            f"Generated themes for {len(generated_themes)} value stream(s), "
+                            f"failed for {len(failed_value_streams)} value stream(s)"
+                        ),
+                        data=[t.model_dump(by_alias=True) for t in generated_themes],
+                    )
+                return generated_themes, "Theme package generated successfully"
 
             case _:
                 raise CustomException(
@@ -128,14 +151,17 @@ class GeneratorService:
         engagement_request_id: str,
         vs_worklets: List[Worklet],
         user_info: User,
-    ) -> List[Worklet]:
+    ) -> Tuple[List[Worklet], List[Worklet]]:
         """
         Generate Theme worklets for the approved Value Streams via ThemeGenerationHandler.
 
         TEGApiSpec §6 - Screen 3. Endpoint: POST /api/v1/worklets/{erWorkletId}/worklets, GENERATE.
         The request body is the approved VALUE_STREAM worklets (each with a valueStreamId property).
-        The handler is multi-VS: it batches stage/description/capability selection across them and
-        generates one THEME worklet per value stream, parented to that VS worklet.
+        The handler is multi-VS: it is called ONCE with all VS so it can batch stage/description/
+        capability selection across them, and it returns one THEME worklet per value stream - a
+        generated theme, or a failure worklet carrying ``generationError`` (a shared-call failure
+        fails every VS; a per-VS failure fails only that VS). The handler does not raise on LLM
+        failures; this method splits the returned worklets into generated vs failed.
 
         Args:
             engagement_request_id: ER worklet ID (URL path param).
@@ -143,7 +169,8 @@ class GeneratorService:
             user_info: Authenticated user performing the operation.
 
         Returns:
-            The list of saved THEME worklets (one per approved Value Stream).
+            ``(generated_themes, failed_value_streams)`` - the saved generated THEME worklets and the
+            saved failure worklets (each carrying ``generationError``). Both are persisted.
         """
         # Step 0 - require at least one VS worklet, each carrying a valueStreamId (deduped for audit).
         if not vs_worklets:
@@ -195,11 +222,17 @@ class GeneratorService:
         )
         theme_worklets = await handler.run(er_worklet=er_worklet, vs_worklets=vs_worklets)
 
-        # Step 4 - persist each generated THEME worklet (new worklets, parented to their VS worklet).
-        saved_themes: List[Worklet] = []
+        # Step 4 - persist each THEME worklet and split successes from failures. A failure worklet
+        # carries a generationError property (the generated content is replaced by the error).
+        generated_themes: List[Worklet] = []
+        failed_value_streams: List[Worklet] = []
         for theme_worklet in theme_worklets:
             theme_worklet.current_user = user_info
-            saved_themes.append(await self.upsert_worklet(theme_worklet, user_info))
+            saved = await self.upsert_worklet(theme_worklet, user_info)
+            if theme_mapper.get_property(saved, theme_mapper.ThemeProps.GENERATION_ERROR):
+                failed_value_streams.append(saved)
+            else:
+                generated_themes.append(saved)
 
         # Step 5 - update the ER worklet's selected_VS_ids audit trail with ALL value streams.
         er_properties = {
@@ -220,9 +253,10 @@ class GeneratorService:
             await self.upsert_worklet(er_worklet, user_info)
 
         self.logger.info(
-            f"Generated Theme package(s) for {len(saved_themes)} VS under ER {engagement_request_id}"
+            "Theme generation for ER %s: %d generated, %d failed",
+            engagement_request_id, len(generated_themes), len(failed_value_streams),
         )
-        return saved_themes
+        return generated_themes, failed_value_streams
 
     async def _analyze_worklets(self, source_worklet: Worklet, user: User) -> Worklet:
         """

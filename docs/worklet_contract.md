@@ -47,8 +47,8 @@ So the stub only needs to carry the **`valueStreamId`** property (the catalogue 
 description, value proposition, trigger, stages, and L3/L2 capabilities all come from SQL — see the
 catalogue service (`ThemeService` / `ValueStreamCatalogue`).
 
-The VS worklet's **`businessValueStream`** property is also read and **carried over as-is** onto the
-generated theme worklet (so the API/service layer doesn't have to re-add it).
+The VS worklet's **`title`** + **`valueStreamId`** are also read to **build** the theme's
+`businessValueStream` label (`"<title> {<valueStreamId>}"`), so the API/service layer doesn't have to.
 
 ### VS fields used per prompt
 
@@ -79,7 +79,7 @@ properties below. The input VS worklet is not modified.
 
 | Property name | Content |
 | --- | --- |
-| `businessValueStream` | carried over from the VS worklet as-is (e.g. `"Acquire Asset {VSR00074583}"`) |
+| `businessValueStream` | built as `"<title> {<valueStreamId>}"` from the VS worklet (e.g. `"Acquire Asset {VSR00074583}"`) |
 | `summary` | `"<idmt ticket title> - <vs name>"` |
 | `description` | per-VS framing paragraph over the shared body |
 | `businessNeeds` | the Business Needs text for this value stream |
@@ -135,7 +135,7 @@ Azure SQL unavailable (`503`). Every error is logged (`logger.error`) before it 
 
 ### Failure worklet shape
 
-Same THEME envelope as a generated theme (parented to its VS worklet, `businessValueStream` carried),
+Same THEME envelope as a generated theme (parented to its VS worklet, `businessValueStream` built),
 with the generated content replaced by a single `generationError` (the error detail string):
 
 ```json

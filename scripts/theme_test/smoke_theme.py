@@ -179,8 +179,8 @@ def build_er_worklet(raw_text: str) -> Worklet:
 
 def build_vs_worklets() -> List[Worklet]:
     # VALUE_STREAM worklets: each has its own worklet id (becomes the theme's parentWorkletId), a
-    # valueStreamId property (the catalogue lookup key), and a businessValueStream label that is
-    # carried over onto the theme worklet.
+    # valueStreamId property (the catalogue lookup key), and a title; the handler builds the theme's
+    # businessValueStream label as "<title> {<valueStreamId>}".
     return [
         Worklet(
             id=f"vswlet-{vs_id}",
@@ -188,7 +188,7 @@ def build_vs_worklets() -> List[Worklet]:
             worklet_type="VALUE_STREAM",
             properties=[
                 _prop("valueStreamId", vs_id),
-                _prop("businessValueStream", f"Value Stream {{{vs_id}}}"),
+                _prop("title", "Value Stream"),
             ],
         )
         for vs_id in VALUE_STREAMS

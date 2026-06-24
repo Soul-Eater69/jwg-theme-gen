@@ -247,12 +247,12 @@ The five calls' outputs make up each generated THEME worklet (one per value stre
 value-stream worklet:
 
 These seven generated properties make up the theme worklet (whose `parentWorkletId` is the VS
-worklet's id and whose type is `THEME`). One more, `businessValueStream`, is **carried over** from the
-VS worklet (not prompt-generated):
+worklet's id and whose type is `THEME`). One more, `businessValueStream`, is **built** from the VS
+worklet's `title` + `valueStreamId` (not prompt-generated):
 
 | Property | From |
 | --- | --- |
-| `businessValueStream` | carried from the VS worklet (not generated) |
+| `businessValueStream` | built as `"<title> {<valueStreamId>}"` from the VS worklet (not generated) |
 | `summary` | `"<ticket title> - <vs name>"` |
 | `description` | framing paragraph (call 2) + shared body (call 1) |
 | `businessNeeds` | call 5 |
