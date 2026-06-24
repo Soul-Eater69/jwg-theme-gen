@@ -18,7 +18,6 @@ from jwg_app.domain.models.theme_generation import (
     ValueStreamCatalogue,
 )
 from jwg_app.domain.services.theme import worklet_mapper as mapper
-from jwg_app.infrastructure.external.retry_config import RetryConfig
 from jwg_app.domain.services.theme_generation_handler import ThemeGenerationHandler
 
 CONFIG_PATH = str(Path(__file__).resolve().parents[2] / "configs" / "user_config.yaml")
@@ -206,77 +205,45 @@ def test_any_core_call_failure_raises_503(schema):
     # description body / framing / stage selection / capabilities are core: a failure raises and
     # aborts the whole request (not a per-VS flag). (TextOut here is the body call, which runs first.)
     platform = SchemaFailingPlatform(failing_schema=schema)
-    handler = _handler_with_retry(platform, RetryConfig(enabled=False))
+    handler = _handler(platform)
     with pytest.raises(CustomException) as exc:
         asyncio.run(handler.run(_er(), [_vs_worklet("vs1")]))
     assert exc.value.status_code == 503
 
 
-def _handler_with_retry(platform, retry, catalogue=None):
-    # Retry policy is internal (not a constructor arg); set it directly for fast/deterministic tests.
-    handler = ThemeGenerationHandler(catalogue or _catalogue_with_stages("vs1"), platform, CONFIG_PATH)
-    handler._retry = retry
-    return handler
-
-
-def test_retry_enabled_retries_to_limit():
-    platform = CountingPlatform(status=503)
-    handler = _handler_with_retry(platform, RetryConfig(max_attempts=3, delay_seconds=0))
-    _, _, status = asyncio.run(
-        handler._agenerate_with_retry("k", [{"role": "user", "content": "x"}], TextOut)
-    )
-    assert status == 503
-    assert platform.calls == 3  # retried up to max_attempts
-
-
-def test_retry_disabled_makes_single_attempt():
-    platform = CountingPlatform(status=503)
-    handler = _handler_with_retry(platform, RetryConfig(enabled=False))
-    _, _, status = asyncio.run(
-        handler._agenerate_with_retry("k", [{"role": "user", "content": "x"}], TextOut)
-    )
-    assert status == 503
-    assert platform.calls == 1  # flag off -> no retry
-
-
-@pytest.mark.parametrize("status", [400, 401, 403, 404, 500])
-def test_non_retryable_status_is_not_retried(status):
-    # 500 is deliberately NOT retried (the gateway folds real bugs into it).
-    platform = CountingPlatform(status=status)
-    handler = _handler_with_retry(platform, RetryConfig(max_attempts=3, delay_seconds=0))
-    asyncio.run(handler._agenerate_with_retry("k", [{"role": "user", "content": "x"}], TextOut))
-    assert platform.calls == 1
+def _handler(platform, catalogue=None):
+    return ThemeGenerationHandler(catalogue or _catalogue_with_stages("vs1"), platform, CONFIG_PATH)
 
 
 class ValidationFailingPlatform:
-    """Returns 200 whose body fails schema validation `fail_times` times, then a valid body."""
+    """Returns a 200 whose body does not match the output schema, and counts the calls made."""
 
-    def __init__(self, fail_times):
-        self.fail_times = fail_times
+    def __init__(self):
         self.calls = 0
 
     async def agenerate(self, message, model_params=None, output_function=None, **kwargs):
         self.calls += 1
-        if self.calls <= self.fail_times:
-            return ["not", "an", "object"], None, 200  # 200 but does not match TextOut -> retry
-        return {"text": "ok"}, None, 200
+        return ["not", "an", "object"], None, 200  # 200 but does not match TextOut
 
 
-def test_validation_failure_is_retried_then_raises():
-    platform = ValidationFailingPlatform(fail_times=99)  # never produces valid output
-    handler = _handler_with_retry(platform, RetryConfig(max_attempts=3, delay_seconds=0))
+def test_validation_failure_raises_503_in_one_attempt():
+    # No retry: a 200 whose body fails schema validation surfaces a 503 after a single call.
+    platform = ValidationFailingPlatform()
+    handler = _handler(platform)
     with pytest.raises(CustomException) as exc:
         asyncio.run(handler._call("description_body", TextOut, ticket_context="x"))
     assert exc.value.status_code == 503
-    assert platform.calls == 3  # re-sampled up to max_attempts
+    assert platform.calls == 1  # one attempt, no re-sample
 
 
-def test_validation_failure_recovers_on_retry():
-    platform = ValidationFailingPlatform(fail_times=1)  # bad once, then valid
-    handler = _handler_with_retry(platform, RetryConfig(max_attempts=3, delay_seconds=0))
-    out = asyncio.run(handler._call("description_body", TextOut, ticket_context="x"))
-    assert out.text == "ok"
-    assert platform.calls == 2  # one bad parse, retried, then succeeded
+def test_llm_failure_makes_a_single_call():
+    # A transient gateway status is not retried either: one call, then 503.
+    platform = CountingPlatform(status=503)
+    handler = _handler(platform)
+    with pytest.raises(CustomException) as exc:
+        asyncio.run(handler._call("description_body", TextOut, ticket_context="x"))
+    assert exc.value.status_code == 503
+    assert platform.calls == 1
 
 
 # ---- happy path (multiple value streams) ----------------------------------------------
@@ -307,9 +274,7 @@ def test_produces_one_theme_per_value_stream():
 def test_any_vs_business_needs_failure_raises_503():
     # one value stream's business needs fails -> the whole request fails (no partial result)
     platform = BusinessNeedsFailingPlatform(failing_vs="vs1")
-    handler = _handler_with_retry(
-        platform, RetryConfig(enabled=False), catalogue=_catalogue_with_stages("vs1", "vs2")
-    )
+    handler = _handler(platform, catalogue=_catalogue_with_stages("vs1", "vs2"))
     with pytest.raises(CustomException) as exc:
         asyncio.run(handler.run(_er(), [_vs_worklet("vs1"), _vs_worklet("vs2")]))
     assert exc.value.status_code == 503

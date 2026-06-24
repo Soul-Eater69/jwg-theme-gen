@@ -141,31 +141,24 @@ aborts the whole request.
 | --- | --- |
 | `404` | ER worklet or VS worklet not found (missing/empty input) |
 | `503` | Azure SQL service unavailable |
-| `503` | LLM service unavailable after retries (any of: description body/framing, stage selection, capabilities, a value stream's business needs) |
-| `503` | LLM output failed schema validation after retries |
+| `503` | LLM service unavailable (any of: description body/framing, stage selection, capabilities, a value stream's business needs) |
+| `503` | LLM output failed schema validation |
 | `400` | A value stream resolved no stages (defensive; not expected for an approved value stream) |
 
-LLM retry (before a `503`): transient statuses `429, 502, 503, 504` are retried; `400/401/403/404/500`
-fail fast. A 200 whose body fails schema validation is also retried (see §4).
+There is no retry: each LLM call is made once. Any non-200 status, missing data, or schema-validation
+failure surfaces a `503` immediately (see §4).
 
 ---
 
-## 4. LLM retry + strict output (built in)
+## 4. Strict structured output (built in)
 
-Nothing to pass - both are inside the handler:
+Nothing to pass - it is inside the handler:
 
 - **Strict structured output.** Every LLM call is sent with a strict `response_format` (constrained
   decoding), so the model is forced to match the schema - it cannot rename, omit, or mistype a field.
   Built from the call's schema; no config needed.
-- **Transport retry.** Transient gateway failures (`429, 502, 503, 504`) are retried; `400/401/403/
-  404/500` fail fast. Defaults (`RetryConfig` in
-  `jwg_app/infrastructure/external/retry_config.py` - shared, reusable by other LLM-calling modules):
-  3 attempts, ~1s fixed delay + jitter (not exponential).
-- **Validation retry.** A `200` whose body does not match the schema (or is malformed JSON) is
-  re-sampled, up to the same attempt count, before surfacing a `503`. Strict output makes this rare;
-  it is the backstop for when the gateway does not honor strict.
-
-To change either policy, edit the `RetryConfig` defaults.
+- **No retry.** Each call is made once. Strict decoding is the only guard; a gateway failure or a
+  body that still fails schema validation surfaces a `503` (no transport or validation re-sampling).
 
 ---
 

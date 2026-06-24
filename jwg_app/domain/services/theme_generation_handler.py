@@ -22,7 +22,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import random
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
@@ -45,7 +44,6 @@ from jwg_app.domain.models.theme_generation import (
 from jwg_app.domain.services.theme import output_resolver as resolver
 from jwg_app.domain.services.theme import prompt_builder as prompts
 from jwg_app.domain.services.theme import worklet_mapper as mapper
-from jwg_app.domain.services.theme.config import ThemeGenerationConfig
 from jwg_app.domain.services.utils import load_config
 from jwg_app.infrastructure.external.strict_schema import strict_response_format
 
@@ -82,7 +80,6 @@ class ThemeGenerationHandler:
         self._platform = platform_client
         config = load_config(user_config_path)
         self._usecase = config["theme_generation"]
-        self._retry = ThemeGenerationConfig().retry
 
     async def run(self, er_worklet: Worklet, vs_worklets: list[Worklet]) -> list[Worklet]:
         """
@@ -101,9 +98,8 @@ class ThemeGenerationHandler:
         Raises:
             CustomException: Aborts the whole request - 404 if the ER or VS worklets are missing; 503
                 if Azure SQL or any LLM call (description body/framing, stage selection, capabilities,
-                or a value stream's business needs) is unavailable after retries; 400 if a value
-                stream unexpectedly resolved no stages. Every value stream is attempted (and each call
-                retried) before the request fails.
+                or a value stream's business needs) is unavailable; 400 if a value stream unexpectedly
+                resolved no stages. Every value stream is attempted before the request fails.
         """
         if er_worklet is None or not vs_worklets:
             logger.error("theme generation aborted (404): ER worklet or VS worklet not found")
@@ -150,8 +146,8 @@ class ThemeGenerationHandler:
         l3_by_stage = await self._capability_selection(er, vs_list, stages_by_vs, catalogue)
 
         # --- Per-VS phase: each value stream's own flow (business needs + assembly). Every value
-        # stream is attempted (and each call retried) before we decide; if ANY fails, the whole
-        # request fails - all-or-nothing, so the caller never receives a silently-incomplete set.
+        # stream is attempted before we decide; if ANY fails, the whole request fails -
+        # all-or-nothing, so the caller never receives a silently-incomplete set.
         results = await asyncio.gather(
             *(
                 self._build_theme(vs_wlet, vs_by_id[vs_id], er, stages_by_vs, l3_by_stage, body, framings)
@@ -352,7 +348,7 @@ class ThemeGenerationHandler:
             The Business Needs text (empty if the value stream has no selected stages).
 
         Raises:
-            CustomException: 503 if the LLM is unavailable after retries.
+            CustomException: 503 if the LLM is unavailable.
         """
         if not stages:
             return ""
@@ -372,7 +368,8 @@ class ThemeGenerationHandler:
         Run one structured LLM call for the given prompt key.
 
         Builds the system and user messages from the usecase prompt config, sends them through the
-        chat-completions API constrained to ``schema``, and validates the structured result.
+        chat-completions API constrained (strict) to ``schema``, and validates the structured result.
+        A single attempt is made - there is no retry; strict structured output is the only guard.
 
         Args:
             key: The prompt key in the theme-generation usecase config.
@@ -383,54 +380,14 @@ class ThemeGenerationHandler:
             The validated ``schema`` instance.
 
         Raises:
-            CustomException: 503 if the LLM gateway still fails after retries, returns a non-200
-                status or no data, or the output fails schema validation on every attempt.
+            CustomException: 503 if the LLM gateway fails, returns a non-200 status or no data, or
+                the output fails schema validation.
         """
         prompt = self._usecase["prompt"][key]
         messages = [
             {"role": "system", "content": prompt["system_role"]},
             {"role": "user", "content": prompt["static_prompt"].format(**values)},
         ]
-        # Validation retry: a 200 whose body does not match the schema is re-sampled (the gateway
-        # retries transient failures internally; this re-tries a bad/malformed structured output).
-        attempts = self._retry.attempts()
-        for attempt in range(1, attempts + 1):
-            data, error, status_code = await self._agenerate_with_retry(key, messages, schema)
-            if error or status_code != 200 or data is None:
-                reason = error or "no data returned"
-                logger.error("LLM call %s failed (status=%s): %s", key, status_code, reason)
-                raise CustomException(
-                    status_code=503, detail=f"LLM service unavailable: {reason}"
-                )
-            try:
-                payload = json.loads(data) if isinstance(data, str) else data
-                return schema.model_validate(payload)
-            except (ValidationError, json.JSONDecodeError) as exc:
-                if attempt < attempts:
-                    logger.warning(
-                        "LLM call %s output failed validation; retry %d/%d",
-                        key, attempt, attempts - 1,
-                    )
-                    continue
-                logger.error(
-                    "LLM call %s output failed validation after %d attempts: %s",
-                    key, attempts, exc,
-                )
-                raise CustomException(
-                    status_code=503, detail="LLM output failed schema validation"
-                ) from exc
-
-    async def _agenerate_with_retry(
-        self, key: str, messages: list[dict[str, str]], schema: type[BaseModel]
-    ) -> tuple[Any, Any, int]:
-        """Call the platform, retrying only transient gateway failures with a small bounded delay.
-
-        Transient statuses (rate limit / 5xx / timeout) are retried per ``self._retry``; any other
-        failure (e.g. 400/401) returns immediately so we do not retry what cannot succeed. When retry
-        is disabled, exactly one attempt is made.
-        """
-        retry = self._retry
-        max_attempts = retry.attempts()
         # Force strict (constrained) structured output: pass a strict response_format in model_params.
         # agenerate merges model_params into the request last, so this overrides its default
         # (non-strict) response_format - no platform-client change needed. Strict decoding makes the
@@ -439,22 +396,21 @@ class ThemeGenerationHandler:
             **(self._usecase.get("model_params") or {}),
             "response_format": strict_response_format(schema),
         }
-        data = error = status_code = None
-        for attempt in range(1, max_attempts + 1):
-            logger.debug("calling LLM for %s (attempt %d/%d)", key, attempt, max_attempts)
-            data, error, status_code = await self._platform.agenerate(
-                message=messages,
-                model_params=model_params,
-                output_function=schema,
-            )
-            succeeded = not error and status_code == 200 and data is not None
-            if succeeded or status_code not in retry.retryable_status or attempt == max_attempts:
-                return data, error, status_code
-            delay = retry.delay_seconds * random.uniform(1.0, 1.5)  # bounded jitter, not exponential
-            logger.warning(
-                "LLM call %s transient failure (status=%s); retry %d/%d in %.1fs",
-                key, status_code, attempt, max_attempts - 1, delay,
-            )
-            await asyncio.sleep(delay)
-        return data, error, status_code
+        data, error, status_code = await self._platform.agenerate(
+            message=messages,
+            model_params=model_params,
+            output_function=schema,
+        )
+        if error or status_code != 200 or data is None:
+            reason = error or "no data returned"
+            logger.error("LLM call %s failed (status=%s): %s", key, status_code, reason)
+            raise CustomException(status_code=503, detail=f"LLM service unavailable: {reason}")
+        try:
+            payload = json.loads(data) if isinstance(data, str) else data
+            return schema.model_validate(payload)
+        except (ValidationError, json.JSONDecodeError) as exc:
+            logger.error("LLM call %s output failed schema validation: %s", key, exc)
+            raise CustomException(
+                status_code=503, detail="LLM output failed schema validation"
+            ) from exc
 

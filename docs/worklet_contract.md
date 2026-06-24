@@ -124,9 +124,8 @@ are no partial results and no per-theme failure flags - the UI either shows the 
 error, which is the right contract when failed themes aren't surfaced in the UI and there is no
 per-theme regeneration.
 
-Every value stream is attempted, and each LLM call retried (429 / 5xx / timeout, per the theme retry
-config), **before** the request fails. Every error is logged (`logger.error`) before it surfaces, so
-an aborted request is traceable in the logs as well as the response.
+Every value stream is attempted **before** the request fails. Every error is logged (`logger.error`)
+before it surfaces, so an aborted request is traceable in the logs as well as the response.
 
 ### Error reference
 
@@ -134,12 +133,12 @@ an aborted request is traceable in the logs as well as the response.
 | --- | --- |
 | `404` | ER worklet or VS worklet not found |
 | `503` | Azure SQL service unavailable |
-| `503` | LLM service unavailable after retries (description body/framing, stage selection, capabilities, or any value stream's business needs) |
+| `503` | LLM service unavailable (description body/framing, stage selection, capabilities, or any value stream's business needs) |
 | `400` | A value stream resolved no stages (defensive; not expected, since an approved value stream has governed stages) |
 
 Note: when the LLM selects no stage for a value stream, the resolver falls back to all of that value
-stream's catalogue stages (not a failure). Retryable before the above: `429`, `502`, `503`, `504`.
-Not retried (fail fast): `400`, `401`, `403`, `404`, `500` (the gateway folds real bugs into `500`).
+stream's catalogue stages (not a failure). There is no retry - each LLM call is made once, and any
+failure (non-200, no data, or a body that fails schema validation) surfaces a `503` immediately.
 
 ---
 
