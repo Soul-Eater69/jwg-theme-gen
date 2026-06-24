@@ -112,6 +112,41 @@ class _DebugPlatform:
         return getattr(self._inner, name)
 
 
+class _FaultPlatform:
+    """Wraps a platform to inject a 503 on selected calls, to exercise the failure-worklet paths.
+
+    Modes:
+        shared = fail a shared/batched call (stage selection) -> every value stream fails.
+        needs  = fail business needs for ``target_vs`` only      -> just that value stream fails.
+    """
+
+    def __init__(self, inner: Any, mode: str, target_vs: str = "") -> None:
+        self._inner = inner
+        self._mode = mode
+        self._target_vs = target_vs
+
+    async def agenerate(
+        self,
+        message: List[Dict[str, str]],
+        model_params: Optional[Dict[str, Any]] = None,
+        output_function: Optional[type] = None,
+        **kwargs: Any,
+    ) -> Tuple[Optional[Any], Optional[str], int]:
+        schema = output_function.__name__ if output_function else ""
+        user = message[-1]["content"] if message else ""
+        if self._mode == "shared" and schema == "BatchedStageSelection":
+            return None, "injected shared failure (stage selection)", 503
+        # business needs is a TextOut whose prompt carries the VS id (the body TextOut does not).
+        if self._mode == "needs" and schema == "TextOut" and self._target_vs and self._target_vs in user:
+            return None, f"injected business-needs failure ({self._target_vs})", 503
+        return await self._inner.agenerate(
+            message=message, model_params=model_params, output_function=output_function, **kwargs
+        )
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
 # --- worklet builders ----------------------------------------------------------------------
 
 def _prop(name: str, value: Any) -> Dict[str, Any]:
@@ -316,14 +351,19 @@ async def main(args: argparse.Namespace) -> None:
 
     from db_session import dispose, session_scope
 
-    platform = _build_real_platform()
-    if args.debug:
-        platform = _DebugPlatform(platform)
-    print("# platform: real PlatformRestClient (config from .env)")
-
     raw_text = _load_raw_text(args.raw_text_file)
     er_worklet, vs_worklets = build_er_worklet(raw_text), build_vs_worklets()
     vs_ids = [mapper.value_stream_id(w) for w in vs_worklets]
+
+    platform = _build_real_platform()
+    if args.fail != "none":
+        target_vs = vs_ids[0] if vs_ids else ""
+        platform = _FaultPlatform(platform, args.fail, target_vs)
+        print(f"# fault injection: --fail {args.fail}"
+              + (f" (target VS {target_vs})" if args.fail == "needs" else ""))
+    if args.debug:
+        platform = _DebugPlatform(platform)
+    print("# platform: real PlatformRestClient (config from .env)")
     print(f"# {len(vs_worklets)} value stream(s): {vs_ids} | only={args.only}")
 
     try:
@@ -405,6 +445,13 @@ if __name__ == "__main__":
                         help="run coverage analysis on the generated themes (only with --only all)")
     parser.add_argument("--worklet", action="store_true",
                         help="worklet mode: print each generated THEME worklet as JSON (only with --only all)")
+    parser.add_argument(
+        "--fail",
+        choices=["none", "shared", "needs"],
+        default="none",
+        help="inject a 503 to test failure worklets: 'shared' fails a batched call (every VS fails); "
+             "'needs' fails business needs for the first VS (only that VS fails)",
+    )
     parser.add_argument("--config-path", default=CONFIG_PATH,
                         help=f"path to user_config.yaml (default: auto-found at {CONFIG_PATH})")
     main_args = parser.parse_args()
