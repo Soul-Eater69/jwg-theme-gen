@@ -40,7 +40,14 @@ import logging
 from http import HTTPStatus
 from typing import List, Optional, Tuple
 
-from worklet_data_api import User, Worklet, WorkletDataAPI, WorkletType  # prod package
+from worklet_data_api import (  # prod package
+    QueryRequest,
+    User,
+    Worklet,
+    WorkletDataAPI,
+    WorkletState,
+    WorkletType,
+)
 
 from jwg_app.domain.exceptions.custom_exception import CustomException
 from jwg_app.domain.interfaces.platform_client import PlatformClient
@@ -234,11 +241,10 @@ class GeneratorService:
                 status_code=er_validation["status_code"], detail=er_validation["detail"]
             )
 
-        # Step 3 - the generated THEME worklets to score. Drop failure worklets (a theme that failed
-        # generation carries a generationError and has no description/business needs) so they don't
-        # drag the score down - the coverage service assumes only valid themes.
+        # Step 3 - the generated THEME worklets to score. The helper already skips deleted themes and
+        # themes that failed generation (those carry a generationError and have nothing to score), so
+        # the coverage service only sees valid themes.
         themes = await self._get_generated_themes_for_analysis(er_worklet)  # returns THEME worklets
-        themes = [t for t in themes if not t.get_property_value("generationError")]
 
         # Step 4 - score the themes (the coverage service returns the metrics; it does not mutate).
         analysis = self.coverage_service.analyze(er_worklet=er_worklet, themes=themes)
@@ -248,3 +254,49 @@ class GeneratorService:
         er_worklet.current_user = user
         er_worklet = await self.worklet_api_er.update_worklet(er_worklet.id, er_worklet, user)
         return er_worklet
+
+    async def _get_generated_themes_for_analysis(self, er_worklet: Worklet) -> List[Worklet]:
+        """
+        Fetch the generated THEME worklets to score for an Engagement Request.
+
+        Walks the worklet tree: the ER's child VALUE_STREAM worklets, then the THEME children under
+        each VS. Returns the THEME **worklets** (the coverage service builds the scored text from
+        them - it reads ``description`` + ``businessNeeds``). Skipped:
+          - deleted VS / deleted themes,
+          - themes that failed generation (they carry a ``generationError`` and have no
+            description/business needs to score).
+
+        Args:
+            er_worklet: The Engagement Request worklet.
+
+        Returns:
+            The scorable generated THEME worklets across all of the ER's value streams.
+
+        Raises:
+            CustomException: 404 if no scorable theme is found across any value stream.
+        """
+        vs_query = QueryRequest(
+            filters={"parentWorkletId": er_worklet.id, "workletType": WorkletType.VALUE_STREAM.value}
+        )
+        value_streams = await self.worklet_api_vs.query_worklets(query_request=vs_query)
+
+        themes: List[Worklet] = []
+        for vs in value_streams or []:
+            if vs.state == WorkletState.DELETED:
+                continue
+            theme_query = QueryRequest(
+                filters={"parentWorkletId": vs.id, "workletType": WorkletType.THEME.value}
+            )
+            for theme in await self.worklet_api_theme.query_worklets(query_request=theme_query) or []:
+                if theme.state == WorkletState.DELETED:
+                    continue
+                if theme.get_property_value("generationError"):  # a theme that failed generation
+                    continue
+                themes.append(theme)
+
+        if not themes:
+            raise CustomException(
+                status_code=HTTPStatus.NOT_FOUND,
+                detail=f"No themes found for analysis (parentWorkletId={er_worklet.id})",
+            )
+        return themes
